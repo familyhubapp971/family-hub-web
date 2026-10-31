@@ -5,7 +5,7 @@
 import { test as base } from 'playwright-bdd';
 import type { BrowserContext } from '@playwright/test';
 import { mintE2eAccessToken } from './auth/jwt.js';
-import { resolveSupabaseUrl } from './auth/env.js';
+import { LOCAL_AUTH_URL } from './auth/env.js';
 import { buildSupabaseLocalStorageEntry } from './auth/session.js';
 import { cleanupFamily, seedFamily, type SeededFamily } from './auth/seed.js';
 
@@ -59,7 +59,7 @@ async function createSessionEntry(
     Buffer.from(accessToken.split('.')[1] ?? '', 'base64url').toString('utf8'),
   ) as { exp: number };
   const sessionEntry = buildSupabaseLocalStorageEntry({
-    supabaseUrl: resolveSupabaseUrl(),
+    authUrl: LOCAL_AUTH_URL,
     accessToken,
     userId,
     email,

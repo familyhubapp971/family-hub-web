@@ -1,11 +1,13 @@
 import type { Page } from '@playwright/test';
+import { STAGING_AUTH_URL } from '../auth/env.js';
+import { sessionStorageKey } from '../auth/session.js';
 
 // Page object for /login. Mirrors SignupPage: testid selectors match
 // the data-testid attributes wired in src/public-pages/sign-in/LoginPage.tsx.
 // FHS-224 stripped the password field from the UI (passwordless parent
 // auth per ADR 0011); the e2e back-door for the synthetic FHS-196
-// account therefore POSTs to Supabase's password grant directly and
-// seeds the session into localStorage rather than filling a form.
+// account therefore POSTs to the sign-in service's password grant directly
+// and seeds the session into localStorage rather than filling a form.
 export class LoginPage {
   constructor(private readonly page: Page) {}
 
@@ -36,29 +38,20 @@ export class LoginPage {
 
   /**
    * Sign in the synthetic e2e account by going around the magic-link
-   * UI: hit Supabase's password-grant endpoint, then seed localStorage
-   * with the returned session so the supabase-js client on the next
-   * page load picks it up. The Supabase password column still exists
-   * (ADR 0011 §Consequences), we just don't expose it to humans.
-   *
-   * Resolves the storage key from SUPABASE_URL (`sb-<projectRef>-auth-token`).
+   * UI: hit our staging sign-in service's password grant (through the
+   * staging api's /auth/v1 pass-through, FHS-700), then seed localStorage
+   * with the returned session so the supabase-js client on the next page
+   * load picks it up. The password column still exists (ADR 0011
+   * §Consequences); only this test account has one, and no screen offers it.
    */
   async loginAndWaitForRedirect(email: string, password: string) {
-    const supabaseUrl = process.env['SUPABASE_URL'] ?? process.env['VITE_SUPABASE_URL'];
-    const anonKey = process.env['SUPABASE_ANON_KEY'] ?? process.env['VITE_SUPABASE_ANON_KEY'];
-    if (!supabaseUrl || !anonKey) {
-      throw new Error(
-        'SUPABASE_URL and SUPABASE_ANON_KEY (or the VITE_ prefixed equivalents) ' +
-          'must be set for the e2e auth helper. See infra/supabase/README.md.',
-      );
-    }
-    const res = await this.page.request.post(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
-      headers: { apikey: anonKey, 'Content-Type': 'application/json' },
-      data: { email, password },
-    });
+    const res = await this.page.request.post(
+      `${STAGING_AUTH_URL}/auth/v1/token?grant_type=password`,
+      { headers: { 'Content-Type': 'application/json' }, data: { email, password } },
+    );
     if (!res.ok()) {
       const body = await res.text();
-      throw new Error(`Supabase password grant failed (${res.status()}): ${body}`);
+      throw new Error(`Password sign-in failed (${res.status()}): ${body}`);
     }
     const raw = (await res.json()) as {
       access_token: string;
@@ -67,7 +60,7 @@ export class LoginPage {
       token_type: string;
       user: unknown;
     };
-    // Supabase-js v2 keys session validity off `expires_at` (epoch
+    // supabase-js v2 keys session validity off `expires_at` (epoch
     // seconds). The /token endpoint only returns expires_in, so we
     // compute expires_at locally and merge, without this the session
     // is treated as expired on first getSession() and dropped.
@@ -75,8 +68,7 @@ export class LoginPage {
       ...raw,
       expires_at: Math.floor(Date.now() / 1000) + raw.expires_in,
     };
-    const projectRef = new URL(supabaseUrl).hostname.split('.')[0];
-    const storageKey = `sb-${projectRef}-auth-token`;
+    const storageKey = sessionStorageKey(STAGING_AUTH_URL);
     // Seed via addInitScript BEFORE navigating, so the supabase-js
     // client picks the session up on its very first getSession() call
     // rather than racing the already-resolved AuthProvider effect.

@@ -7,7 +7,8 @@
 // through dist/umd/supabase.js, since the package ships minified with no
 // public docs page for this internal shape):
 //   - storageKey = `sb-${new URL(url).hostname.split('.')[0]}-auth-token`
-//     (set in the SupabaseClient constructor from the project URL).
+//     (set in the SupabaseClient constructor from the sign-in address,
+//     VITE_AUTH_URL since FHS-696/700).
 //   - The stored value is `JSON.stringify(session)`: a plain deep clone of
 //     the Session object, no wrapper.
 //   - `getSession()` returns it AS-IS with no network call, UNLESS
@@ -18,14 +19,15 @@
 //   - `_isValidSession()` only checks that access_token / refresh_token /
 //     expires_at are present: no signature check on the client side.
 
-export function supabaseStorageKey(supabaseUrl: string): string {
-  const hostname = new URL(supabaseUrl).hostname;
+export function sessionStorageKey(authUrl: string): string {
+  const hostname = new URL(authUrl).hostname;
   const ref = hostname.split('.')[0];
   return `sb-${ref}-auth-token`;
 }
 
 export interface BuildSessionOptions {
-  supabaseUrl: string;
+  /** The address the web's sign-in client uses (VITE_AUTH_URL). */
+  authUrl: string;
   accessToken: string;
   userId: string;
   email: string;
@@ -71,7 +73,7 @@ export function buildSupabaseLocalStorageEntry(opts: BuildSessionOptions): Local
     },
   };
   return {
-    key: supabaseStorageKey(opts.supabaseUrl),
+    key: sessionStorageKey(opts.authUrl),
     value: JSON.stringify(session),
   };
 }

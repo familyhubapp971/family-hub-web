@@ -29,10 +29,10 @@ for variable names).
 
 ## Environments
 
-| Name         | ID                                     | Purpose                         | Branch           |
-| ------------ | -------------------------------------- | ------------------------------- | ---------------- |
-| `production` | `3fb76a04-e926-4bdf-ae03-659966366dfb` | Live site with real users       | `main`           |
-| `staging`    | not created yet                        | GoTrue work (FHS-676) and tests | `staging` (plan) |
+| Name         | ID                                     | Purpose                                                   | Branch    |
+| ------------ | -------------------------------------- | --------------------------------------------------------- | --------- |
+| `production` | `3fb76a04-e926-4bdf-ae03-659966366dfb` | Live site with real users                                 | `main`    |
+| `staging`    | `8b1d3dab-dc01-49ea-906e-726c8a12f4f2` | Pre-release checks, own sign-in (GoTrue) since 2026-10-31 | `staging` |
 
 The branching strategy is documented in
 [ADR 0006](../decisions/0006-branching-strategy.md): merges land on
@@ -194,10 +194,11 @@ Trade-offs we accepted:
 | `FOUNDER_PASSCODE`          | Railway API (FHS-672)            | 6 to 12 digits for the founder's `/admin` feedback page; unset switches the page off. Never in the repo.                                                                                                   |
 | `FOUNDER_TOKEN_SECRET`      | Railway dashboard (FHS-672)      | 48+ random characters (`openssl rand -base64 48`) that sign the `/admin` pass. Without it the page stays off on deployed servers.                                                                          |
 
-JWT verification is via Supabase's JWKS endpoint at
-`$SUPABASE_URL/auth/v1/.well-known/jwks.json` (ES256), not a shared HMAC
-secret, `SUPABASE_JWT_SECRET` is therefore not used. See FHS-191 for the
-JWKS-cached middleware that lands once auth wiring begins.
+Sign-in passes are checked against public keys (ES256), never a shared
+secret. Where the keys come from: `AUTH_JWKS_URL` and `AUTH_ISSUER` when set
+(our own GoTrue, see [Sign-in service](#sign-in-service-gotrue)), otherwise
+`$SUPABASE_URL/auth/v1/.well-known/jwks.json`. Staging sets the pair;
+production uses the Supabase fallback until FHS-701.
 
 ### frontend vars
 
@@ -521,6 +522,44 @@ to neutralize the production instance before it racks up runtime.
 - [FHS-202](https://qualicion2.atlassian.net/browse/FHS-202): Configure Railway production post-upgrade
 - [FHS-155](https://qualicion2.atlassian.net/browse/FHS-155): Railway Infrastructure & DNS (parent epic)
 - [ADR 0006](../decisions/0006-branching-strategy.md): branching strategy
+
+## Sign-in service (GoTrue)
+
+Since 2026-10-31 staging signs people in with our own GoTrue server, not
+Supabase ([ADR 0022](../decisions/0022-own-sign-in-server.md)). Production
+moves in FHS-701, with a backup first and the founder's go-ahead.
+
+| Part        | Staging set-up                                                                                                                               |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Service     | `gotrue` (image `supabase/gotrue:v2.197.0`), private only at `gotrue.railway.internal:9999`, no public address                               |
+| Database    | The environment's own Postgres, `auth` schema, `gotrue` login role                                                                           |
+| Way in      | `https://fh-api-staging.up.railway.app/auth/v1/*`, passed on by the api (`GOTRUE_URL`)                                                       |
+| Passes      | ES256 keys in `GOTRUE_JWT_KEYS`. The api trusts them via `AUTH_ISSUER` (`https://fh-api-staging.up.railway.app/auth/v1`) and `AUTH_JWKS_URL` |
+| Admin calls | `GOTRUE_ADMIN_SIGNING_KEYS=${{gotrue.GOTRUE_JWT_KEYS}}` on the api. GoTrue refuses admin passes signed with the shared secret                |
+| Emails      | Resend SMTP (`smtp.resend.com:587`) from `noreply@fhapp.co`. Needs the Railway Pro plan: Hobby blocks outgoing email                         |
+| Templates   | `GOTRUE_MAILER_TEMPLATES_*` read `family-hub-api/email-templates/*.html` from GitHub (`staging` branch on staging, `main` on production)     |
+| Google      | `GOTRUE_EXTERNAL_GOOGLE_*`, same Google client as before. Redirect: `https://fh-api-staging.up.railway.app/auth/v1/callback`                 |
+| Web         | `VITE_AUTH_URL=https://fh-api-staging.up.railway.app` on the web service                                                                     |
+
+Rules learned the hard way:
+
+- `API_EXTERNAL_URL` is the bare api address. Email links get their path
+  from `GOTRUE_MAILER_URLPATHS_*=/auth/v1/verify`. Putting `/auth/v1` in
+  `API_EXTERNAL_URL` drops it from the links.
+- Never set `GOTRUE_MAILER_EXTERNAL_HOSTS`.
+- An account added by hand needs blank text (`''`), not a missing value, in
+  its four token columns, and dates in `created_at` and `updated_at`, or
+  GoTrue cannot load it.
+
+### Browser-test account
+
+The full browser run (after each merge to `staging`) signs in for real as
+`e2e@familyhub.test`, the only account on staging with a password. Its
+details live in the web repo's GitHub secrets `E2E_AUTH_USER_EMAIL` and
+`E2E_AUTH_USER_PASSWORD`. To replace the password, write a bcrypt hash of a
+new one into `auth.users.encrypted_password` for that address on the
+staging database, then update the secret. The quick run on every pull
+request needs no account and no secret.
 
 ## Production switch (2026-10-31)
 

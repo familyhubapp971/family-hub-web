@@ -14,8 +14,8 @@ import * as schema from '../../.api-repo/src/database/schema.js';
 // the api webServer's DATABASE_URL (`process.env.DATABASE_URL` with the
 // same local-dev fallback), captured at module load, before anything else
 // in this package touches process.env, so it can never accidentally pick
-// up a value meant for something else (see env.ts's comment on why
-// SUPABASE_URL resolution is kept separate from this).
+// up a value meant for something else (such as the staging DATABASE_URL in
+// .env.local).
 const E2E_DATABASE_URL = process.env['DATABASE_URL'] ?? 'postgres://localhost:5432/familyhub_test';
 
 let _pool: pg.Pool | undefined;

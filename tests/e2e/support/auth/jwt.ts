@@ -1,6 +1,6 @@
 import { importJWK, SignJWT } from 'jose';
 import { E2E_TEST_KEY_ID, E2E_TEST_PRIVATE_JWK } from './test-key.js';
-import { resolveSupabaseUrl } from './env.js';
+import { LOCAL_AUTH_ISSUER } from './env.js';
 
 // FHS-516: mint an ES256 JWT the RUNNING e2e api will accept, using the
 // same pattern as the integration tier's mintToken() helper
@@ -19,19 +19,18 @@ export interface MintOptions {
 
 export async function mintE2eAccessToken(opts: MintOptions): Promise<string> {
   const privateKey = await importJWK(E2E_TEST_PRIVATE_JWK, 'ES256');
-  const issuer = `${resolveSupabaseUrl()}/auth/v1`;
   const now = Math.floor(Date.now() / 1000);
   const exp = now + (opts.expSecondsFromNow ?? 3600);
   return new SignJWT({
     email: opts.email,
-    // Supabase convention, not checked by the middleware, but present on
-    // every real session JWT so the token shape matches production.
+    // Not checked by the middleware, but present on every real session
+    // pass from the sign-in service, so the shape matches production.
     role: 'authenticated',
     aud: 'authenticated',
   })
     .setProtectedHeader({ alg: 'ES256', kid: E2E_TEST_KEY_ID })
     .setSubject(opts.sub)
-    .setIssuer(issuer)
+    .setIssuer(LOCAL_AUTH_ISSUER)
     .setIssuedAt(now)
     .setExpirationTime(exp)
     .sign(privateKey);

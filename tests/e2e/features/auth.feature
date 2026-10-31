@@ -12,8 +12,8 @@ Feature: Auth
   # equivalents now live in signup.feature (signup form behaviour) +
   # verify-email.feature (post-submit confirmation). Scenario 1 below
   # is the legacy /me vertical slice (FHS-196) which still uses the
-  # synthetic e2e account; it stays out of @critical because hitting
-  # staging Supabase from GH Actions runners is flaky.
+  # synthetic e2e account; it stays out of @critical because it signs in
+  # on the real staging sign-in service over the network (FHS-700).
 
   # FHS-196: Vertical-slice check. Signs in with the dedicated
   # synthetic e2e@familyhub.test account, then visits /me and asserts

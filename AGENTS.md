@@ -15,7 +15,7 @@ overview.
 
 **Stack:** Hono + Drizzle + Zod (API) · React + Vite + Tailwind (web) ·
 Postgres with RLS (data) · Vitest + Playwright + k6 (testing) · Railway
-(hosting) · Supabase (auth + email).
+(hosting) · our own GoTrue on Railway (sign-in, [ADR 0022](documents/decisions/0022-own-sign-in-server.md); production on Supabase until FHS-701) · Resend (email).
 
 **Repo layout:** this repo holds the web site (`src/`: screens by product area in
 `src/areas/`, public pages in `src/public-pages/`, routing and shared
@@ -739,7 +739,7 @@ genuinely untouched: silence is not the same as "no impact"):
 | **Frontend (web)**       | Routes, components, hooks, forms, validation schemas, copy, design-system tokens, accessibility, mobile-web fallback    |
 | **Backend (api)**        | New/changed endpoints, Zod schemas, OpenAPI spec, middleware, jobs, error envelope, rate limits, idempotency            |
 | **Data layer**           | Drizzle schema, migrations (and rollback), RLS policies, indexes, seed data, fixtures, FKs to `tenant_id` / `users`     |
-| **Infrastructure**       | Railway services, env vars, Supabase config (auth + storage), Stripe products/webhooks, CI workflows, scheduled jobs    |
+| **Infrastructure**       | Railway services, env vars, sign-in server (GoTrue) settings, Stripe products/webhooks, CI workflows, scheduled jobs    |
 | **Auth / multi-tenancy** | New role checks, RLS coverage on new tables, `tenant_id` propagation, JWKS / JWT claim assumptions                      |
 | **Cross-cutting**        | Shared rules (`shared-rules` in family-hub-api), test helpers, feature flags, observability surfaces                    |
 | **Tests**                | Which tier (unit / integration / e2e / perf) gains scenarios; new fixtures; whether tenant-isolation scenario is needed |
@@ -775,17 +775,17 @@ explicitly before doing the work**, wait for acknowledgement, then
 update every affected surface in the same PR (per the bundling rule).
 Categories to scan when proposing a change:
 
-| Category               | Surfaces                                                                                            |
-| ---------------------- | --------------------------------------------------------------------------------------------------- |
-| Product / requirements | `documents/features/`, Jira ticket scope + AC, PR template                                          |
-| Technical              | code, schemas, API contracts (OpenAPI), migrations, infra (Railway, Supabase, Stripe), CI workflows |
-| Tests                  | Vitest unit, Vitest integration, Playwright E2E, k6 perf                                            |
-| Architecture           | ADRs in `documents/decisions/`: write a new ADR or supersede an existing one                        |
-| Strategy               | `documents/strategy/saas-transformation.md` and any Confluence mirror                               |
-| Business / launch      | pricing, marketing copy, sales collateral, onboarding flow copy                                     |
-| Confluence             | `https://qualicion2.atlassian.net/spaces/FA/...` pages                                              |
-| Legal / compliance     | LICENSE, ToS, privacy policy, regulated-tier obligations                                            |
-| Process                | AGENTS.md rules, PR template, memory entries                                                        |
+| Category               | Surfaces                                                                                          |
+| ---------------------- | ------------------------------------------------------------------------------------------------- |
+| Product / requirements | `documents/features/`, Jira ticket scope + AC, PR template                                        |
+| Technical              | code, schemas, API contracts (OpenAPI), migrations, infra (Railway, GoTrue, Stripe), CI workflows |
+| Tests                  | Vitest unit, Vitest integration, Playwright E2E, k6 perf                                          |
+| Architecture           | ADRs in `documents/decisions/`: write a new ADR or supersede an existing one                      |
+| Strategy               | `documents/strategy/saas-transformation.md` and any Confluence mirror                             |
+| Business / launch      | pricing, marketing copy, sales collateral, onboarding flow copy                                   |
+| Confluence             | `https://qualicion2.atlassian.net/spaces/FA/...` pages                                            |
+| Legal / compliance     | LICENSE, ToS, privacy policy, regulated-tier obligations                                          |
+| Process                | AGENTS.md rules, PR template, memory entries                                                      |
 
 **Anti-pattern:** silently updating only the file the user pointed at,
 leaving every other affected surface stale. That's how a "small"
@@ -885,7 +885,7 @@ across pages. Rules:
 
 ### Secrets
 
-- All secrets live in `.env.local` (gitignored) or Railway/Supabase env vars.
+- All secrets live in `.env.local` (gitignored) or Railway env vars.
 - Never commit tokens, API keys, or `.env*` files. GitHub secret scanning +
   push protection are enabled on the repo as a backstop.
 
@@ -1268,7 +1268,7 @@ endpoint, k6 thresholds tied to `documents/technical/slos.md`).
 - **Where:** `tests/e2e/`. Two configs: `playwright.config.ts` (full matrix) and `playwright.critical.config.ts` (`@critical`-tagged subset, chromium only).
 - **Traceability contract:** scenario names in `tests/e2e/features/<slug>.feature` are **character-for-character identical** to the Gherkin scenarios in `documents/features/<slug>.md`. `bddgen` generates the spec; the generated `test()` name carries through. This is the Jira AC ↔ test traceability mechanism.
 - **Page objects:** `tests/e2e/support/pages/<FeatureName>Page.ts`. No raw `page.locator()` in step files.
-- **Authenticated pages (FHS-516):** a spec that needs a signed-in `/t/:slug/*` page imports `test`/`expect` from `tests/e2e/support/fixtures.ts` (not `@playwright/test`) and depends on the **`authedFamily`** fixture: it seeds a fresh isolated family + admin/child/habit, mints an ES256 JWT the local api trusts (via the test-only `E2E_TEST_JWKS` override in family-hub-api's `src/security/auth.ts`, honoured **only** under `NODE_ENV=test`), and injects a supabase-js session into `localStorage`, so the spec can `page.goto('/t/<slug>/…')` already logged in. The configs point the web dev's `VITE_API_URL` at the local api so the browser hits the api that trusts the test token. `authed-smoke.feature` is the reference example.
+- **Authenticated pages (FHS-516):** a spec that needs a signed-in `/t/:slug/*` page imports `test`/`expect` from `tests/e2e/support/fixtures.ts` (not `@playwright/test`) and depends on the **`authedFamily`** fixture: it seeds a fresh isolated family + admin/child/habit, mints an ES256 JWT the local api trusts (via the test-only `E2E_TEST_JWKS` override in family-hub-api's `src/security/auth.ts`, honoured **only** under `NODE_ENV=test`), and injects a supabase-js session into `localStorage`, so the spec can `page.goto('/t/<slug>/…')` already logged in. The critical config points the web dev's `VITE_API_URL` and `VITE_AUTH_URL` at the local api, which trusts the test token's fixed issuer (`tests/e2e/support/auth/env.ts`), so it needs no secret (FHS-700). `authed-smoke.feature` is the reference example.
 - **Browser matrix:** chromium only on PR (critical subset, fast); full matrix (chromium + webkit + mobile-chrome) post-merge to staging.
 - **Run:** `pnpm -F @familyhub/e2e test:e2e` (full), `test:e2e:critical` (PR-fast subset), `test:e2e:ui` (interactive). Each script runs `bddgen` first then `playwright test`. The configs start the server from `../family-hub-api` (or `FH_API_DIR`).
 

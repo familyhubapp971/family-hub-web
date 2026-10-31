@@ -8,7 +8,7 @@ A multi-tenant SaaS platform for families to coordinate schedules, tasks, and sh
 - **Frontend:** [React 18](https://react.dev/) + [Vite](https://vitejs.dev/) + [Tailwind CSS 3](https://tailwindcss.com/)
 - **Database:** Postgres (with Row-Level Security for tenant isolation, [ADR 0001](documents/decisions/0001-multi-tenancy.md))
 - **Hosting:** Railway (staging + production)
-- **Auth:** Supabase Auth ([ADR 0003](documents/decisions/0003-auth-library.md))
+- **Auth:** our own GoTrue server on Railway, reached through the api ([ADR 0022](documents/decisions/0022-own-sign-in-server.md)). Production stays on Supabase Auth until FHS-701
 - **Billing:** Stripe ([ADR 0004](documents/decisions/0004-stripe-billing.md))
 - **Testing:** Vitest (unit + integration), Playwright + playwright-bdd (E2E), k6 (perf)
 - **Package manager:** pnpm 10 workspaces
@@ -163,12 +163,13 @@ Both `main` and `staging` require PR reviews and passing CI.
 - [Architecture Decision Records](documents/decisions/): durable choices
   - [ADR 0001: Multi-tenancy strategy](documents/decisions/0001-multi-tenancy.md)
   - [ADR 0002: Subdomain tenant routing](documents/decisions/0002-subdomain-tenant-routing.md)
-  - [ADR 0003: Auth library: Supabase Auth](documents/decisions/0003-auth-library.md)
+  - [ADR 0003: Auth library: Supabase Auth](documents/decisions/0003-auth-library.md) (superseded by 0022)
   - [ADR 0004: Billing provider: Stripe](documents/decisions/0004-stripe-billing.md)
   - [ADR 0005: Monorepo structure](documents/decisions/0005-monorepo-structure.md) (superseded by 0021)
   - [ADR 0006: Branching strategy](documents/decisions/0006-branching-strategy.md)
   - [ADR 0007: Reuse the family-hub stack](documents/decisions/0007-stack-reuse.md)
   - [ADR 0021: Split into three repos](documents/decisions/0021-three-repo-split.md)
+  - [ADR 0022: Sign-in runs on our own GoTrue server](documents/decisions/0022-own-sign-in-server.md)
 - [Technical docs](documents/technical/)
 - [Feature specs](documents/features/)
 - [Strategy docs](documents/strategy/): incl. [SaaS Transformation Strategy](documents/strategy/saas-transformation.md)
