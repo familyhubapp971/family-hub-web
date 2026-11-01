@@ -91,6 +91,18 @@ describe('<AuthCallbackPage />', () => {
   // FHS-604: an email link opens a NEW tab, whose sessionStorage is empty.
   // The device-level memory has to carry the address across, or the screen
   // asks who you are even though we sent the link to you.
+  it('FHS-712: a Google sign-in left open too long says so, and offers sign-in again', async () => {
+    renderAt(
+      '/auth/callback?error=invalid_request&error_code=bad_oauth_state&error_description=OAuth+state+has+expired',
+    );
+    expect(await screen.findByTestId('link-expired-title')).toHaveTextContent('That took too long');
+    expect(
+      screen.getByText('We stopped it to keep your account safe. Please try again.'),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('link-expired-try-again')).toBeInTheDocument();
+    expect(screen.queryByTestId('link-expired-send')).not.toBeInTheDocument();
+  });
+
   it('FHS-604: a fresh tab recalls the address from device memory', async () => {
     localStorage.setItem('fh.auth.email', 'sarah@khan.family');
     renderAt(

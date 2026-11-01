@@ -13,6 +13,7 @@ import { LoginPage } from '../public-pages/sign-in/LoginPage';
 import { SignupPage } from '../public-pages/sign-in/SignupPage';
 import { VerifyEmailPage } from '../public-pages/sign-in/VerifyEmailPage';
 import { AuthCallbackPage } from '../public-pages/sign-in/AuthCallbackPage';
+import { AuthErrorRedirect } from '../public-pages/sign-in/AuthErrorRedirect';
 
 // FHS-560: the whole app used to ship as one ~1.9MB bundle, so a first-time
 // visitor downloaded and parsed every signed-in screen (Recharts, Leaflet,
@@ -95,6 +96,7 @@ export function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <AuthErrorRedirect />
         <Suspense fallback={<LoadingScreen />}>
           <Routes>
             {/* Marketing + auth: no tenant context. */}

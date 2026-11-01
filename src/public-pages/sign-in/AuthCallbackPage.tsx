@@ -22,6 +22,13 @@ function extractAuthError(
   return { code, description: h.get('error_description') ?? query.get('error_description') ?? '' };
 }
 
+// FHS-712: our sign-in server keeps a Google sign-in open for 5 minutes. After
+// that it answers "OAuth state has expired" (code bad_oauth_state). That is
+// not a dead email link, so it gets its own message.
+function isGoogleTimeout(err: { code: string; description: string }): boolean {
+  return err.code === 'bad_oauth_state' || /oauth state/i.test(err.description);
+}
+
 function isExpiredLink(err: { code: string; description: string }): boolean {
   return /expired/i.test(err.code) || /expired/i.test(err.description);
 }
@@ -63,9 +70,11 @@ export function AuthCallbackPage() {
     authError
       ? {
           kind: 'error',
-          message: isExpiredLink(authError)
-            ? 'Your sign-in link has expired. Request a new one to log in.'
-            : 'That sign-in link is invalid or has already been used. Request a new one.',
+          message: isGoogleTimeout(authError)
+            ? 'That took too long, so we stopped it to keep your account safe. Please try again.'
+            : isExpiredLink(authError)
+              ? 'Your sign-in link has expired. Request a new one to log in.'
+              : 'That sign-in link is invalid or has already been used. Request a new one.',
         }
       : { kind: 'idle' },
   );
