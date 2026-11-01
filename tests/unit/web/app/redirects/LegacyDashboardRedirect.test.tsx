@@ -153,5 +153,65 @@ describe('<LegacyDashboardRedirect />', () => {
       // No redirect: user stays on the form to pick another slug.
       expect(screen.queryByTestId('tenant-onboarding')).toBeNull();
     });
+
+    it('FHS-713: keeps the taken address in the box to edit, instead of emptying it', async () => {
+      renderRoute();
+      await waitFor(() => expect(screen.getByTestId('no-tenant-create-form')).toBeInTheDocument());
+      fireEvent.change(screen.getByTestId('no-tenant-your-name'), { target: { value: 'Tinu' } });
+      fireEvent.change(screen.getByTestId('no-tenant-family-name'), { target: { value: 'Abass' } });
+      mocks.fetchMock.mockResolvedValueOnce({ ok: false, status: 409, json: async () => ({}) });
+      fireEvent.submit(screen.getByTestId('no-tenant-create-form'));
+      await waitFor(() => expect(screen.getByTestId('no-tenant-error')).toBeInTheDocument());
+      expect((screen.getByTestId('no-tenant-slug') as HTMLInputElement).value).toBe('abass');
+    });
+
+    it.each([
+      ['Oyin26', 'oyin26'],
+      ['TAbass1', 'tabass1'],
+      ['Tabb-21', 'tabb-21'],
+      ['Tinu.!12', 'tinu-12'],
+      ['Oyin26–', 'oyin26-'],
+    ])('FHS-713: tidies phone typing %j into %j as it is typed', async (typed, shown) => {
+      renderRoute();
+      await waitFor(() => expect(screen.getByTestId('no-tenant-create-form')).toBeInTheDocument());
+      fireEvent.change(screen.getByTestId('no-tenant-slug'), { target: { value: typed } });
+      expect((screen.getByTestId('no-tenant-slug') as HTMLInputElement).value).toBe(shown);
+    });
+
+    it('FHS-713: creates the family without a hyphen left at the end', async () => {
+      renderRoute();
+      await waitFor(() => expect(screen.getByTestId('no-tenant-create-form')).toBeInTheDocument());
+      fireEvent.change(screen.getByTestId('no-tenant-your-name'), { target: { value: 'Tinu' } });
+      fireEvent.change(screen.getByTestId('no-tenant-family-name'), { target: { value: 'Abass' } });
+      fireEvent.change(screen.getByTestId('no-tenant-slug'), { target: { value: 'Oyin26–' } });
+      expect(screen.getByTestId('no-tenant-slug')).toHaveAttribute('autocapitalize', 'none');
+      mocks.fetchMock.mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({}) });
+      fireEvent.submit(screen.getByTestId('no-tenant-create-form'));
+      await waitFor(() => expect(screen.getByTestId('tenant-onboarding')).toBeInTheDocument());
+      const lastCall = mocks.fetchMock.mock.calls.at(-1)!;
+      expect(JSON.parse((lastCall[1] as RequestInit).body as string).slug).toBe('oyin26');
+    });
+
+    it("FHS-714: keeps the address within the server's 30 characters", async () => {
+      renderRoute();
+      await waitFor(() => expect(screen.getByTestId('no-tenant-create-form')).toBeInTheDocument());
+      fireEvent.change(screen.getByTestId('no-tenant-slug'), { target: { value: 'a'.repeat(40) } });
+      expect((screen.getByTestId('no-tenant-slug') as HTMLInputElement).value).toHaveLength(30);
+    });
+
+    it('FHS-714: keeps accented letters in the suggested address', async () => {
+      renderRoute();
+      await waitFor(() => expect(screen.getByTestId('no-tenant-create-form')).toBeInTheDocument());
+      fireEvent.change(screen.getByTestId('no-tenant-family-name'), {
+        target: { value: 'Müller' },
+      });
+      expect((screen.getByTestId('no-tenant-slug') as HTMLInputElement).value).toBe('muller');
+    });
+
+    it("FHS-714: shows the site's real address in front of the box", async () => {
+      renderRoute();
+      await waitFor(() => expect(screen.getByTestId('no-tenant-create-form')).toBeInTheDocument());
+      expect(screen.getByText(`${window.location.host}/t/`)).toBeInTheDocument();
+    });
   });
 });
