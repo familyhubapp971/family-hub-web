@@ -69,8 +69,8 @@ browser tab closes, so one person's answers from one visit group together.
 An issue report is saved on its own, with the person, the family, the screen,
 the visit ID, the words and its photos. Photos are kept in our own database,
 not a separate file store. The founder reads reports in **Issues to fix** at
-the top of [/admin](founder-feedback.md). The spreadsheet export does not
-include them.
+the top of [/admin](founder-feedback.md). The Download spreadsheet button
+on /admin does not include them.
 
 ### Sending
 
