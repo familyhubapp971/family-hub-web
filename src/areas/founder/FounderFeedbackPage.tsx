@@ -6,6 +6,10 @@
  * filters and a spreadsheet download. The passcode is checked on the server
  * (FOUNDER_PASSCODE); the page only keeps the 8-hour token it gets back, in
  * this browser tab.
+ *
+ * FHS-717: "Issues to fix" sits at the top, above the feedback. It loads on
+ * its own, so it still shows if the feedback list fails, and the other way
+ * round.
  */
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
@@ -27,6 +31,7 @@ import {
   type RatingSummary,
   type ScreenSummary,
 } from '../../app/lib/founder-feedback';
+import { IssuesToFix } from './IssuesToFix';
 
 const TOKEN_KEY = 'fh-founder-token';
 
@@ -111,16 +116,24 @@ export function FounderFeedbackPage() {
               }}
             />
           </div>
-        ) : loadError ? (
-          <p role="alert" className="rounded-xl border-2 border-black bg-red-50 p-4 text-red-700">
-            {loadError}
-          </p>
-        ) : rows === null ? (
-          <p className="text-purple-200" data-testid="founder-loading">
-            Loading feedback…
-          </p>
         ) : (
-          <FeedbackView rows={rows} />
+          <div className="space-y-8">
+            <IssuesToFix token={token} onUnauthorized={signOut} />
+            {loadError ? (
+              <p
+                role="alert"
+                className="rounded-xl border-2 border-black bg-red-50 p-4 text-red-700"
+              >
+                {loadError}
+              </p>
+            ) : rows === null ? (
+              <p className="text-purple-200" data-testid="founder-loading">
+                Loading feedback…
+              </p>
+            ) : (
+              <FeedbackView rows={rows} />
+            )}
+          </div>
         )}
       </div>
     </div>
