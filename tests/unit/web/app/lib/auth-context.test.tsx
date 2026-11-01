@@ -37,6 +37,7 @@ import {
   signOutAll,
   useAuth,
 } from '../../../../../src/app/lib/auth-context';
+import { knownFamilyCodes, rememberFamilyCodes } from '../../../../../src/app/lib/my-families';
 
 function Probe() {
   const { session, user, loading } = useAuth();
@@ -172,6 +173,26 @@ describe('AuthProvider + useAuth', () => {
     expect(localStorage.getItem(KID_TOKEN_STORAGE_KEY)).toBeNull();
   });
 
+  // FHS-718: the saved family list belongs to whoever just signed out.
+  it('forgets the saved family list when a sign-out is reported', async () => {
+    mocks.getSessionMock.mockResolvedValue({ data: { session: null } });
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId('loading').textContent).toBe('false');
+    });
+    rememberFamilyCodes('user-id', [{ slug: 'e29b-41d4' }]);
+
+    await act(async () => {
+      mocks.authCallback?.('SIGNED_OUT', null);
+    });
+
+    expect(knownFamilyCodes('user-id')).toBeNull();
+  });
+
   // FHS-253 (qa-expert blocker #3): multi-tab: Tab A clears the
   // kid token, Tab B receives a storage event and stays consistent.
   it('listens for cross-tab storage events on fh.kid.token (forward-defensive for FHS-205)', async () => {
@@ -240,6 +261,15 @@ describe('signOutAll() (FHS-253)', () => {
     expect(localStorage.getItem(KID_TOKEN_STORAGE_KEY)).toBeNull();
     expect(mocks.signOutMock).toHaveBeenCalledTimes(1);
     expect(result.error).toBeNull();
+  });
+
+  it('FHS-718: forgets the saved family list, so the next sign-in asks again', async () => {
+    rememberFamilyCodes('user-id', [{ slug: 'e29b-41d4' }]);
+    mocks.signOutMock.mockResolvedValue({ error: null });
+
+    await signOutAll();
+
+    expect(knownFamilyCodes('user-id')).toBeNull();
   });
 
   it('still clears the kid token even when supabase signOut errors', async () => {

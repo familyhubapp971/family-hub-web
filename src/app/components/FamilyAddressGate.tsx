@@ -3,7 +3,7 @@ import { Navigate, Outlet, useLocation, useParams } from 'react-router-dom';
 import { useAuth } from '../lib/auth-context';
 import { API_BASE } from '../lib/api';
 import { isFamilyCode, swapFamilyInPath } from '../lib/family-address';
-import { fetchFamilyCodes, knownFamilyCodes } from '../lib/my-families';
+import { fetchFamilyCodes, knownFamilyCodes, withinTimeLimit } from '../lib/my-families';
 import { FamilyNotFound } from './FamilyNotFound';
 import { LoadingScreen } from './LoadingScreen';
 
@@ -21,15 +21,17 @@ import { LoadingScreen } from './LoadingScreen';
 // their families. A wrong code, someone else's code, or an old surname that
 // is not theirs shows one plain "We can't find that family." screen, the same
 // for all three, instead of a page that half loads and shows a server error.
-// Kid pages and kid sign-ins are left exactly as they were.
+// Kid pages and kid sign-ins are left exactly as they were. A family whose
+// address is still its surname (not given a code yet) opens as before,
+// because the surname is in its own members' list.
 
-type Lookup = {
-  key: string;
+type AddressAnswer = {
   newSlug: string | null;
-  // The check itself failed (no signal, server down), so we know nothing.
+  // The check itself failed (no signal, server down, too slow), so we know nothing.
   failed: boolean;
-  myFamilies: string[] | null;
 };
+
+type Lookup = AddressAnswer & { key: string; myFamilies: string[] | null };
 
 type FamilyCheck = { key: string; myFamilies: string[] | null };
 
@@ -52,7 +54,7 @@ export function FamilyAddressGate() {
 
   const needsCheck =
     canCheck && isCode && slug === lower && !known?.includes(lower) && check?.key !== key;
-  const needsLookup = canCheck && !isCode && lookup?.key !== key;
+  const needsLookup = canCheck && !isCode && !known?.includes(lower) && lookup?.key !== key;
 
   useEffect(() => {
     if (!needsCheck || !userId || !token) return;
@@ -68,19 +70,23 @@ export function FamilyAddressGate() {
   useEffect(() => {
     if (!needsLookup || !userId || !token) return;
     let cancelled = false;
-    const address = fetch(`${API_BASE}/api/family-address/${encodeURIComponent(lower)}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(async (res) => {
-        // 404 is the server's answer for "not an old address of yours".
-        if (res.status === 404) return { newSlug: null, failed: false };
-        if (!res.ok) return { newSlug: null, failed: true };
-        const body = (await res.json()) as { slug?: unknown };
-        const newSlug =
-          typeof body?.slug === 'string' && isFamilyCode(body.slug) ? body.slug : null;
-        return { newSlug, failed: false };
+    const failed: AddressAnswer = { newSlug: null, failed: true };
+    const address = withinTimeLimit<AddressAnswer>(
+      fetch(`${API_BASE}/api/family-address/${encodeURIComponent(lower)}`, {
+        headers: { Authorization: `Bearer ${token}` },
       })
-      .catch(() => ({ newSlug: null, failed: true }));
+        .then(async (res) => {
+          // 404 is the server's answer for "not an old address of yours".
+          if (res.status === 404) return { newSlug: null, failed: false };
+          if (!res.ok) return failed;
+          const body = (await res.json()) as { slug?: unknown };
+          const newSlug =
+            typeof body?.slug === 'string' && isFamilyCode(body.slug) ? body.slug : null;
+          return { newSlug, failed: false };
+        })
+        .catch(() => failed),
+      failed,
+    );
     // Asked at the same time, so the "can't find" button knows where home is
     // and the forwarded page opens without a second wait.
     const cached = knownFamilyCodes(userId);
@@ -119,8 +125,10 @@ export function FamilyAddressGate() {
     return <FamilyNotFound myFamilies={check.myFamilies} />;
   }
 
+  // Our own family, still on its surname address: open it as before.
+  if (known?.includes(lower)) return <Outlet />;
   if (lookup?.key !== key) return <LoadingScreen context="redirect" />;
   if (lookup.newSlug) return goTo(lookup.newSlug);
-  if (lookup.failed) return <Outlet />;
+  if (lookup.failed || lookup.myFamilies?.includes(lower)) return <Outlet />;
   return <FamilyNotFound myFamilies={lookup.myFamilies} />;
 }

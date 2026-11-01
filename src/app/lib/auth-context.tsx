@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
+import { forgetFamilyCodes } from './my-families';
 import { supabase } from './supabase';
 
 // Single source of truth for "is this user signed in?" across the app.
@@ -37,6 +38,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // middleware) will see two identities at once.
       if (event === 'SIGNED_IN') {
         clearKidToken();
+      }
+      // FHS-718: the saved list of families belongs to the person who just
+      // left, so the next sign-in on this tab asks for its own.
+      if (event === 'SIGNED_OUT') {
+        forgetFamilyCodes();
       }
       setSession(nextSession);
       setLoading(false);
@@ -102,6 +108,7 @@ export const KID_TOKEN_STORAGE_KEY = 'fh.kid.token';
  */
 export async function signOutAll(): Promise<{ error: Error | null }> {
   clearKidToken();
+  forgetFamilyCodes();
   const { error } = await supabase.auth.signOut();
   return { error };
 }

@@ -126,7 +126,14 @@ magic link or Google. Kids pick their face and type a PIN.
 
 - **Given** a signed-in parent opens any page of their own family, by code or in capitals
 - **Then** the page opens as before, after the usual loading screen at most
+- **And** a family whose address is still its surname opens its own pages as before
 - **And** kid pages and kid sign-ins behave exactly as before
+
+**Scenario: Signed in as the wrong person**
+
+- **Given** a signed-in grown-up sees "We can't find that family."
+- **When** they tap "Use a different account"
+- **Then** they are signed out and land on the sign-in page
 
 ## Behaviour as shipped
 
@@ -290,6 +297,10 @@ was theirs, so each part of the page failed on its own.
   link may be old or mistyped." and one yellow button, on the app's purple
   background. It is a single column that fits a phone, a tablet and a laptop,
   and the button is full width and at least 44px tall.
+- **A way out of the wrong account.** Under the button, a small "Use a
+  different account" link signs out and opens the sign-in page.
+- **Screen readers hear it first.** The heading takes focus when the page
+  appears, so it is read out straight away.
 - **The button goes home.** "Go to my family" opens the home of the first
   family they belong to, the same one sign-in picks. Someone with no family
   sees "Create your family", which opens the create-a-family step.
@@ -298,16 +309,29 @@ was theirs, so each part of the page failed on its own.
   about the code in the address; it only checks the person's own list.
 - **Old surname links that do not forward** show the same page, instead of
   opening a page that would fail.
+- **A family still on its surname address opens as before.** A family not
+  given a code yet (or after a server rollback) has its surname in its own
+  members' list, so its pages open, and "Go to my family" never comes back to
+  the can't-find page.
 - **The list of your families is asked for once per visit** and kept in
   memory, so moving between your own family's pages does not wait again. This
-  is one extra request on the first family page of a visit. A code not on the
+  is one extra request on the first family page of a visit, unless sign-in
+  already fetched the list on its way in, which it keeps. A code not on the
   list is checked once more before the page says no, so a family you have
   just made or joined opens straight away.
-- **A failed check never blocks you.** With no signal, or if the server cannot
-  answer, the page opens as it did before. The loading screen shows while the
-  check runs, so the broken page never flashes up.
+- **Signing out forgets the list.** The next person to sign in on the same
+  tab gets their own families, never the last person's.
+- **A failed check never blocks you.** With no signal, if the server cannot
+  answer, or if the check takes longer than 8 seconds, the page opens as it
+  did before. The loading screen shows while the check runs, so the broken
+  page never flashes up.
 - **Kids are unchanged.** Kid pages, kid sign-ins on a shared tablet, and the
   kid link with a surname behave exactly as before.
+
+**Known gap, not fixed here:** signing in never returns people to the page
+they asked for. The sign-in step remembers it, but the end of sign-in always
+opens the first family's home. This was already so before FHS-718 and will
+get its own ticket.
 
 ## The phone app (FHS-708)
 

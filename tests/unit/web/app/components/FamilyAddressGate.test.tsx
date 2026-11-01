@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 
 // FHS-715: an old surname address (/t/smith/...) forwards to the family's
@@ -14,12 +14,17 @@ const authState: { session: FakeSession | null; loading: boolean } = {
   session: { access_token: 'tok-1', user: { id: 'user-1' } },
   loading: false,
 };
+const signOutAll = vi.fn();
 vi.mock('../../../../../src/app/lib/auth-context', () => ({
   useAuth: () => authState,
+  signOutAll: () => signOutAll(),
 }));
 
 import { FamilyAddressGate } from '../../../../../src/app/components/FamilyAddressGate';
-import { forgetFamilyCodes } from '../../../../../src/app/lib/my-families';
+import {
+  FAMILY_CHECK_TIME_LIMIT_MS,
+  forgetFamilyCodes,
+} from '../../../../../src/app/lib/my-families';
 
 const OURS = 'e29b-41d4';
 const THEIRS = 'aaaa-1111';
@@ -88,6 +93,8 @@ async function expectCantFind() {
 
 beforeEach(() => {
   fetchMock.mockReset();
+  signOutAll.mockReset();
+  signOutAll.mockResolvedValue({ error: null });
   vi.stubGlobal('fetch', fetchMock);
   forgetFamilyCodes();
   localStorage.clear();
@@ -96,6 +103,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -198,6 +206,45 @@ describe('<FamilyAddressGate />: family codes (FHS-718)', () => {
     );
     expect(await screen.findByTestId('page')).toHaveTextContent('members');
   });
+
+  it('opens the page as before when the check takes longer than 8 seconds', async () => {
+    vi.useFakeTimers();
+    server({ me: () => new Promise(() => {}) });
+    renderAt(`/t/${OURS}/members`);
+    expect(screen.queryByTestId('page')).toBeNull();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(FAMILY_CHECK_TIME_LIMIT_MS);
+    });
+    expect(FAMILY_CHECK_TIME_LIMIT_MS).toBe(8000);
+    expect(screen.getByTestId('page')).toHaveTextContent('members');
+  });
+
+  it("the can't-find heading is focused, so a screen reader reads it out first", async () => {
+    server({ myFamilies: [OURS] });
+    renderAt(`/t/${THEIRS}/members`);
+    const heading = await screen.findByRole('heading', { name: 'We can’t find that family.' });
+    await waitFor(() => expect(heading).toHaveFocus());
+  });
+
+  it('"Use a different account" signs out and opens the sign-in page', async () => {
+    server({ myFamilies: [OURS] });
+    renderAt(`/t/${THEIRS}/members`);
+    fireEvent.click(await screen.findByRole('button', { name: 'Use a different account' }));
+    expect(signOutAll).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent(/^\/login$/));
+  });
+
+  it("a different person signing in on the same tab never gets the first person's families", async () => {
+    server({ myFamilies: [OURS] });
+    const first = renderAt(`/t/${OURS}/members`);
+    expect(await screen.findByTestId('page')).toHaveTextContent('members');
+    first.unmount();
+    authState.session = { access_token: 'tok-2', user: { id: 'user-2' } };
+    server({ myFamilies: [THEIRS] });
+    renderAt(`/t/${OURS}/members`);
+    await expectCantFind();
+    expect(calledUrls().filter((url) => url.endsWith('/api/me'))).toHaveLength(2);
+  });
 });
 
 describe('<FamilyAddressGate />: old surname addresses (FHS-715, FHS-718)', () => {
@@ -230,6 +277,39 @@ describe('<FamilyAddressGate />: old surname addresses (FHS-715, FHS-718)', () =
     );
     renderAt('/t/smith/members');
     expect(await screen.findByTestId('page')).toHaveTextContent('members');
+  });
+
+  it('a family still on its surname address opens its own pages', async () => {
+    server({ myFamilies: ['smith'], oldAddress: reply(404) });
+    renderAt('/t/smith/members');
+    expect(await screen.findByTestId('page')).toHaveTextContent('members');
+    expect(screen.queryByTestId('family-not-found')).toBeNull();
+  });
+
+  it('"Go to my family" for a family still on its surname opens its home, never the can\'t-find page again', async () => {
+    server({ myFamilies: ['smith'], oldAddress: reply(404) });
+    renderAt(`/t/${THEIRS}/members`);
+    fireEvent.click(await screen.findByRole('button', { name: 'Go to my family' }));
+    await waitFor(() =>
+      expect(screen.getByTestId('where')).toHaveTextContent('/t/smith/dashboard'),
+    );
+    expect(await screen.findByTestId('page')).toHaveTextContent('home');
+    expect(screen.queryByTestId('family-not-found')).toBeNull();
+  });
+
+  it('opens the page as before when the old-address check takes longer than 8 seconds', async () => {
+    vi.useFakeTimers();
+    fetchMock.mockImplementation((url: string) =>
+      url.includes('/api/family-address/')
+        ? new Promise(() => {})
+        : Promise.resolve(reply(200, { tenants: [{ slug: OURS }] })),
+    );
+    renderAt('/t/smith/members');
+    expect(screen.queryByTestId('page')).toBeNull();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(FAMILY_CHECK_TIME_LIMIT_MS);
+    });
+    expect(screen.getByTestId('page')).toHaveTextContent('members');
   });
 });
 

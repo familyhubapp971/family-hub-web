@@ -5,6 +5,7 @@ import type { Session } from '@supabase/supabase-js';
 import { signOutAll, useAuth } from '../lib/auth-context';
 import { API_BASE } from '../lib/api';
 import { friendlyAuthErrorMessage } from '../lib/auth-errors';
+import { rememberFamilyCodes } from '../lib/my-families';
 import { LoadingScreen } from '../components/LoadingScreen';
 
 // FHS-227: bridge for the un-prefixed `/dashboard` route. Fetches
@@ -55,6 +56,9 @@ export function LegacyDashboardRedirect() {
           return;
         }
         const body = (await res.json()) as MeResponse;
+        // FHS-718: keep the list, so the family page we open next does not
+        // ask for it a second time.
+        if (session.user?.id) rememberFamilyCodes(session.user.id, body.tenants);
         const slug = body.tenants?.[0]?.slug;
         // FHS-275: ALWAYS try to claim pending invites first, even when
         // the user already has a family of their own: a newly-claimed
