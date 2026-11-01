@@ -151,6 +151,30 @@ box for both states, and the founder's design revision brought back the
 stated panel, which shipped as FHS-609. The panel is fed by the address in
 the link (FHS-605) with device memory as the fallback (FHS-604).
 
+## The phone app (FHS-708)
+
+The app (family-hub-app) offers the same choices with the same words and
+rules as the website, so nobody relearns anything.
+
+- **One screen, not two pages.** "I'm a Parent" and "I'm a Kid" are tabs, and
+  "Create a new family" switches the same card to the sign-up words.
+- **Email links come back to the app** at `familyhub://auth/callback`. That
+  address is on the staging sign-in server's allowed list. Production gets it
+  only when the app is released, with the founder's go-ahead.
+- **Google** opens in a secure in-app browser and returns to the app.
+- **"Check your email!"** has the same 60-second wait before "Resend".
+- **Expired, used or broken links** show the same three reasons and send a
+  fresh link in one tap, to the email the device remembers.
+- **Kids** type the family code once per device; after that they only tap their
+  face and enter the PIN, which checks itself at 4 digits.
+- **A grown-up with no family** creates one in the app, with the website's
+  labels, rules and error lines.
+- **The look stays the website's for now.** The phone design in Magic Patterns
+  ("FH Mobile App Branding Kit" v3) has its own sign-in screen; only its app
+  icon and loading screen are built so far, by founder decision on 2026-11-01.
+- **Expo Go cannot finish a grown-up sign-in**, because its return address is
+  not on the allowed list. Test builds can.
+
 ## Out of scope
 
 - Password sign-in. The product is passwordless by decision (ADR 0011).
