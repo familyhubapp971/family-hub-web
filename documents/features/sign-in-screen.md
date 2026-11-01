@@ -9,7 +9,9 @@
 [FHS-586](https://qualicion2.atlassian.net/browse/FHS-586) (email box colour + helper copy),
 [FHS-360](https://qualicion2.atlassian.net/browse/FHS-360) (kid sign-in),
 [FHS-237](https://qualicion2.atlassian.net/browse/FHS-237) (the card),
-[FHS-714](https://qualicion2.atlassian.net/browse/FHS-714) (sign-in and sign-up test sweep)
+[FHS-714](https://qualicion2.atlassian.net/browse/FHS-714) (sign-in and sign-up test sweep),
+[FHS-715](https://qualicion2.atlassian.net/browse/FHS-715) (Private family code),
+[FHS-716](https://qualicion2.atlassian.net/browse/FHS-716) (One family per home)
 **Status:** shipped
 **Owner:** product-manager
 **Design:** Magic Patterns `kudjspxd3xxroueg5jw11o`, `pages/Login.tsx`
@@ -65,6 +67,32 @@ magic link or Google. Kids pick their face and type a PIN.
 - **Given** the ported screen
 - **When** it is measured
 - **Then** every control is at least 44px, focus rings are visible, and inputs keep their labels
+
+### Story 3: A private family code
+
+**As a** parent
+**I want** my family's address and kid code to be a private code, not our surname
+**so that** nobody can find my children's faces by guessing our name.
+
+#### Acceptance criteria
+
+**Scenario: A kid types the family code once**
+
+- **Given** a kid on a tablet that does not remember a family chooses "I'm a Kid"
+- **When** they type the code from the Members page, like e29b-41d4
+- **Then** their family's faces show, and the tablet remembers the family next time
+
+**Scenario: An old surname link works only for the family**
+
+- **Given** a signed-in parent opens an old address like /t/smith/members
+- **When** the server says that address was their family's
+- **Then** the same page opens at the family's code
+- **And** anyone else gets the usual "not found" or sign-in, never the family
+
+**Scenario: A kid link with a surname asks for the code**
+
+- **Given** a kid opens an old link like /t/smith/kid-login
+- **Then** they land on the step where they type the family code, not on any faces
 
 ## Behaviour as shipped
 
@@ -178,6 +206,41 @@ the link (FHS-605) with device memory as the fallback (FHS-604).
   Letting the kid view win while both stayed signed in would not hold: the
   parent's session clears the kid sign-in every time the tab comes back to
   the front.
+
+## Private family code and one family per home (FHS-715, FHS-716)
+
+What shipped on the website. The server half lives in family-hub-api.
+
+- **The server makes every family's code.** It is 8 letters and digits in two
+  groups, like e29b-41d4, and it is the family's address too
+  (`/t/e29b-41d4/...`). Older families get one as well; their surname address
+  is kept by the server as the "previous" address.
+- **Nobody types an address any more.** The create-a-family form asks only
+  "Your name" and "Family name", and the Family URL box (with its FHS-713
+  tidying) is gone. The form opens the family at the code the server sends
+  back.
+- **One family per home.** If someone who already made a family fills the form
+  again, the server hands back that family and the form opens it, rather than
+  making a second one.
+- **The address can end with the family name**, like
+  `/t/e29b-41d4/the-smith-family`, which opens the family's home. The code on
+  its own does the same. Inner pages keep `/t/<code>/<page>`: a deliberate
+  choice, so every link in the app did not need rewriting.
+- **Old surname addresses forward for members only.** A signed-in person
+  opening `/t/smith/...` is asked about on the server; if the address was their
+  family's, the same page opens at the code, with the rest of the address and
+  anything after the `?` kept. Anyone else, or someone signed out, sees the
+  usual not-found or sign-in, so a surname never reveals a family. A code typed
+  in capitals opens the same family.
+- **Kid pages with a surname ask for the code.** `/t/smith/kid-login` goes to
+  the "I'm a Kid" family-code step instead of showing faces.
+- **The kid family-code box** shows "e29b-41d4" as its example, with the help
+  line "Ask a grown-up for your family code. It looks like e29b-41d4 and is on
+  the Members page." The phone app uses the same words. A code typed in
+  capitals, with a space, or without the hyphen still finds the family.
+- **Grown-ups get the code on the Members page** in a "Kids' sign-in" card, with
+  a button that hands the tablet over to the kids. See
+  [family-members.md](family-members.md).
 
 ## The phone app (FHS-708)
 
