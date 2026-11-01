@@ -16,7 +16,10 @@ import { LoadingScreen } from '../components/LoadingScreen';
 // Cleanup tracked under FHS-205 (drop legacy un-prefixed routes once
 // AuthCallback resolves the tenant itself).
 
-const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+// The server's limit is 30 characters (public-tenant.ts); the box stops there
+// too, so nobody types an address the server will refuse.
+const SLUG_MAX = 30;
+const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{0,28}[a-z0-9])?$/;
 
 interface MeResponse {
   tenants?: Array<{ slug: string }>;
@@ -24,16 +27,41 @@ interface MeResponse {
 
 type State = { kind: 'loading' } | { kind: 'redirect'; to: string } | { kind: 'no-tenant' };
 
-function deriveSlug(name: string): string {
-  return name
+/**
+ * FHS-713: tidies a family web address as it is typed on a phone. Capitals
+ * become small letters (phones capitalise the first letter on their own), and
+ * long dashes (iPhones turn a typed hyphen into one), spaces, dots and symbols
+ * become a single hyphen. A hyphen at the start goes; one at the end stays
+ * while they are still typing.
+ */
+export function cleanSlugInput(raw: string): string {
+  return raw
     .toLowerCase()
-    .trim()
-    .replace(/&/g, ' and ')
-    .replace(/[^a-z0-9\s-]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 30);
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+/, '')
+    .slice(0, SLUG_MAX);
+}
+
+/** The address as saved: no hyphen left at the end. */
+function finishSlug(slug: string): string {
+  return slug.replace(/-+$/, '');
+}
+
+function deriveSlug(name: string): string {
+  return (
+    name
+      .toLowerCase()
+      // "Müller" becomes "muller", not "mller".
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+      .replace(/&/g, ' and ')
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 30)
+  );
 }
 
 export function LegacyDashboardRedirect() {
@@ -128,12 +156,11 @@ function CreateFamilyPanel({ session }: CreateFamilyPanelProps) {
       setError('Family name is required.');
       return;
     }
-    if (!SLUG_RE.test(effectiveSlug) || effectiveSlug.length < 2) {
+    const finalSlug = finishSlug(effectiveSlug);
+    if (!SLUG_RE.test(finalSlug) || finalSlug.length < 2) {
       setError('Family URL must be 2+ lowercase letters, digits or hyphens.');
       return;
     }
-    setSubmitting(true);
-    setError(null);
     // FHS-274: the founder types their own name; no more guessing from
     // auth metadata / email prefixes (which produced names like "FAMILY").
     const displayName = yourName.trim();
@@ -141,6 +168,8 @@ function CreateFamilyPanel({ session }: CreateFamilyPanelProps) {
       setError('Your name is required.');
       return;
     }
+    setSubmitting(true);
+    setError(null);
     try {
       const res = await fetch(`${API_BASE}/api/public/tenant`, {
         method: 'POST',
@@ -148,15 +177,18 @@ function CreateFamilyPanel({ session }: CreateFamilyPanelProps) {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ familyName: fName, displayName, slug: effectiveSlug }),
+        body: JSON.stringify({ familyName: fName, displayName, slug: finalSlug }),
       });
       if (res.status === 200 || res.status === 201) {
-        navigate(`/t/${effectiveSlug}/onboarding`, { replace: true });
+        navigate(`/t/${finalSlug}/onboarding`, { replace: true });
         return;
       }
       if (res.status === 409) {
         setError('That family URL is taken. Try a different one.');
         setSubmitting(false);
+        // FHS-713: keep the taken address in the box to edit, instead of
+        // emptying it (the box used to go blank here).
+        setSlug(finalSlug);
         setEditingSlug(true);
         return;
       }
@@ -230,14 +262,20 @@ function CreateFamilyPanel({ session }: CreateFamilyPanelProps) {
               Family URL
             </label>
             <div className="flex items-center gap-2 font-body text-sm">
-              <span className="text-gray-500">familyhub.app/t/</span>
+              {/* The site's real address, not a domain we do not own. */}
+              <span className="text-gray-500">{window.location.host}/t/</span>
               <input
                 id="no-tenant-slug"
                 type="text"
                 value={effectiveSlug}
+                maxLength={SLUG_MAX}
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 onChange={(e) => {
                   setEditingSlug(true);
-                  setSlug(e.target.value);
+                  setSlug(cleanSlugInput(e.target.value));
+                  setError(null);
                 }}
                 className="flex-1 rounded-md border-2 border-black px-3 py-2"
                 data-testid="no-tenant-slug"
