@@ -2,7 +2,7 @@
  * FHS-717: "Issues to fix" at the top of the founder's /admin page.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
 import { IssuesToFix } from '../../../../../src/areas/founder/IssuesToFix';
 import type { FounderIssue } from '../../../../../src/app/lib/founder-issues';
 
@@ -284,14 +284,67 @@ describe('<IssuesToFix />', () => {
     expect(photoCalls).toHaveLength(2);
   });
 
-  it('says so when a photo will not load', async () => {
+  it('lets the founder tap a photo that did not load to try again', async () => {
     photoReply = () => Promise.resolve({ ok: false, status: 500, blob: async () => new Blob() });
     await loaded();
-    await waitFor(() =>
-      expect(screen.getAllByTestId('founder-issue-photo-failed')[0]).toHaveTextContent(
-        'Photo did not load',
-      ),
+    const retry = await screen.findAllByRole('button', { name: 'Try loading photo again' });
+    expect(retry).toHaveLength(2);
+    expect(retry[0]).toHaveClass('h-20', 'w-20');
+
+    photoReply = photoBytes;
+    fireEvent.click(retry[0]!);
+    await waitFor(() => expect(screen.getAllByTestId('founder-issue-photo')).toHaveLength(1));
+    expect(screen.getAllByRole('button', { name: 'Try loading photo again' })).toHaveLength(1);
+  });
+
+  it('locks the page when the pass runs out while loading a photo', async () => {
+    photoReply = () => Promise.resolve({ ok: false, status: 401, blob: async () => new Blob() });
+    await loaded();
+    await waitFor(() => expect(onUnauthorized).toHaveBeenCalled());
+  });
+
+  it("waits to download a card's photos until the card is near the screen", async () => {
+    const watchers: Array<(entries: Array<{ isIntersecting: boolean }>) => void> = [];
+    const margins: string[] = [];
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        constructor(
+          cb: (entries: Array<{ isIntersecting: boolean }>) => void,
+          opts?: { rootMargin?: string },
+        ) {
+          watchers.push(cb);
+          margins.push(opts?.rootMargin ?? '');
+        }
+        observe() {}
+        disconnect() {}
+      },
     );
+    await loaded();
+    const photoCalls = () =>
+      fetchMock.mock.calls.filter(([url]) => (url as string).includes('/photos/'));
+    expect(screen.getAllByTestId('founder-issue-photo-loading')).toHaveLength(2);
+    expect(photoCalls()).toHaveLength(0);
+    expect(margins[0]).toBe('300px 0px');
+
+    await act(async () => watchers[0]!([{ isIntersecting: true }]));
+    await waitFor(() => expect(screen.getAllByTestId('founder-issue-photo')).toHaveLength(2));
+    expect(photoCalls()).toHaveLength(2);
+  });
+
+  it('moves the keyboard to the next card after Mark fixed', async () => {
+    await loaded();
+    fireEvent.click(within(cards()[0]!).getByRole('button', { name: 'Mark fixed' }));
+    expect(cardTitles()).toEqual(['The Calendar']);
+    expect(within(cards()[0]!).getByRole('button', { name: 'Mark fixed' })).toHaveFocus();
+  });
+
+  it('moves the keyboard to the New and Fixed choice when the last card leaves the list', async () => {
+    patchReply = () => Promise.resolve(json({ id: 'i-fixed', status: 'new', fixedAt: null }));
+    await loaded();
+    fireEvent.click(screen.getByRole('button', { name: 'Fixed 1' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Reopen' }));
+    expect(screen.getByRole('button', { name: 'Fixed 0' })).toHaveFocus();
   });
 
   it('lets go of the photos when the page closes', async () => {
@@ -350,11 +403,13 @@ describe('<IssuesToFix />', () => {
       expect(button).toHaveClass('min-h-[44px]');
     });
 
-    it('wraps long words and emails rather than running off the edge', async () => {
+    it('wraps long family names, emails and words rather than running off the edge', async () => {
       await loaded();
       const card = cards()[0]!;
-      expect(within(card).getByText('Add meal does nothing')).toHaveClass('break-words');
-      expect(within(card).getByText('Sam Smith · sam@example.com')).toHaveClass('break-words');
+      for (const text of ['Add meal does nothing', 'Sam Smith · sam@example.com', 'Smith Family']) {
+        expect(within(card).getByText(text)).toHaveClass('break-words', '[overflow-wrap:anywhere]');
+      }
+      expect(within(card).getByRole('heading')).toHaveClass('[overflow-wrap:anywhere]');
     });
 
     it('keeps the New and Fixed choices and the photos big enough to tap', async () => {

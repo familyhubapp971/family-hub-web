@@ -5,7 +5,7 @@
  * The founder works down the New list and marks each one fixed; Reopen puts
  * it back. Photos only load with the founder pass, so each one is fetched
  * with it and shown from a short-lived browser address, let go of when the
- * page closes.
+ * page closes. A card's photos only download once it is near the screen.
  */
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
@@ -30,6 +30,31 @@ interface Enlarged {
   alt: string;
 }
 
+/**
+ * True once the element is within 300px of the screen, so photos further down
+ * a long list are not downloaded until the founder scrolls towards them.
+ * Browsers without IntersectionObserver (and the unit tests) load at once.
+ */
+function useNearScreen<T extends Element>(): [React.RefObject<T>, boolean] {
+  const ref = useRef<T>(null);
+  const [near, setNear] = useState(() => typeof IntersectionObserver === 'undefined');
+  useEffect(() => {
+    if (near || !ref.current) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setNear(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '300px 0px' },
+    );
+    observer.observe(ref.current);
+    return () => observer.disconnect();
+  }, [near]);
+  return [ref, near];
+}
+
 const FILTERS: Array<{ status: IssueStatus; label: string; empty: string }> = [
   { status: 'new', label: 'New', empty: 'No issues to fix. Nice.' },
   { status: 'fixed', label: 'Fixed', empty: 'Nothing marked fixed yet.' },
@@ -44,6 +69,9 @@ export function IssuesToFix({
   onUnauthorized: () => void;
 }) {
   const titleId = useId();
+  const sectionRef = useRef<HTMLElement>(null);
+  // Where the keyboard goes after a card leaves the list it was in.
+  const focusAfterMove = useRef<number | null>(null);
   const [issues, setIssues] = useState<FounderIssue[] | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -116,9 +144,24 @@ export function IssuesToFix({
     [token, onUnauthorized],
   );
 
+  // After Mark fixed or Reopen moves a card out of view, put the keyboard on
+  // the card that took its place, or on the New and Fixed choice if none did.
+  useEffect(() => {
+    const index = focusAfterMove.current;
+    const section = sectionRef.current;
+    if (index === null || !section) return;
+    focusAfterMove.current = null;
+    const buttons = section.querySelectorAll<HTMLElement>('[data-testid="founder-issue-toggle"]');
+    const target =
+      buttons[index] ??
+      section.querySelector<HTMLElement>('[data-issues-filter][aria-pressed="true"]');
+    target?.focus();
+  }, [issues]);
+
   const setStatus = useCallback(
-    async (issue: FounderIssue, status: IssueStatus) => {
+    async (issue: FounderIssue, status: IssueStatus, index: number) => {
       const before = { status: issue.status, fixedAt: issue.fixedAt };
+      focusAfterMove.current = index;
       const patch = (id: string, change: Partial<FounderIssue>) =>
         setIssues((cur) => cur?.map((i) => (i.id === id ? { ...i, ...change } : i)) ?? cur);
 
@@ -169,7 +212,7 @@ export function IssuesToFix({
   const current = FILTERS.find((f) => f.status === filter)!;
 
   return (
-    <section aria-labelledby={titleId} data-testid="founder-issues">
+    <section ref={sectionRef} aria-labelledby={titleId} data-testid="founder-issues">
       <h2 id={titleId} className="mb-3 flex items-center gap-2 font-heading text-xl">
         <span aria-hidden="true">🛠️</span>
         Issues to fix
@@ -211,6 +254,7 @@ export function IssuesToFix({
                   key={f.status}
                   type="button"
                   aria-pressed={on}
+                  data-issues-filter=""
                   onClick={() => setFilter(f.status)}
                   data-testid={`founder-issues-filter-${f.status}`}
                   className={[
@@ -242,12 +286,12 @@ export function IssuesToFix({
             </p>
           ) : (
             <ul className="space-y-3">
-              {shown.map((issue) => (
+              {shown.map((issue, index) => (
                 <li key={issue.id}>
                   <IssueCard
                     issue={issue}
                     saving={saving.includes(issue.id)}
-                    onSetStatus={setStatus}
+                    onSetStatus={(i, status) => setStatus(i, status, index)}
                     loadPhoto={loadPhoto}
                     onEnlarge={setEnlarged}
                   />
@@ -301,6 +345,7 @@ function IssueCard({
   onEnlarge: (photo: Enlarged) => void;
 }) {
   const headingId = useId();
+  const [photosRef, nearScreen] = useNearScreen<HTMLUListElement>();
   const area = screenLabel(issue.screen);
   const family = issue.familyName || 'Family not known';
   const isNew = issue.status === 'new';
@@ -313,11 +358,13 @@ function IssueCard({
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 space-y-0.5">
-          <h3 id={headingId} className="font-heading text-lg">
+          <h3 id={headingId} className="break-words font-heading text-lg [overflow-wrap:anywhere]">
             {area}
           </h3>
-          <p className="text-sm font-bold">{family}</p>
-          <p className="break-words text-sm text-gray-700">{reporterLine(issue)}</p>
+          <p className="break-words text-sm font-bold [overflow-wrap:anywhere]">{family}</p>
+          <p className="break-words text-sm text-gray-700 [overflow-wrap:anywhere]">
+            {reporterLine(issue)}
+          </p>
           <p className="text-xs font-bold text-gray-500">
             <time dateTime={issue.createdAt} title={fullDate(issue.createdAt)}>
               {timeAgo(issue.createdAt)}
@@ -345,13 +392,13 @@ function IssueCard({
       </div>
 
       {issue.description.trim() && (
-        <p className="mt-3 whitespace-pre-wrap break-words text-sm font-medium">
+        <p className="mt-3 whitespace-pre-wrap break-words text-sm font-medium [overflow-wrap:anywhere]">
           {issue.description}
         </p>
       )}
 
       {issue.photos.length > 0 && (
-        <ul className="mt-3 flex flex-wrap gap-2" aria-label="Photos">
+        <ul ref={photosRef} className="mt-3 flex flex-wrap gap-2" aria-label="Photos">
           {issue.photos.map((photo, i) => (
             <li key={photo.id}>
               <IssuePhotoThumb
@@ -359,6 +406,7 @@ function IssueCard({
                 photo={photo}
                 number={i + 1}
                 total={issue.photos.length}
+                active={nearScreen}
                 loadPhoto={loadPhoto}
                 onOpen={(url) =>
                   onEnlarge({
@@ -381,6 +429,7 @@ function IssuePhotoThumb({
   photo,
   number,
   total,
+  active,
   loadPhoto,
   onOpen,
 }: {
@@ -388,13 +437,17 @@ function IssuePhotoThumb({
   photo: IssuePhoto;
   number: number;
   total: number;
+  /** False until the card is near the screen; nothing downloads before then. */
+  active: boolean;
   loadPhoto: LoadPhoto;
   onOpen: (url: string) => void;
 }) {
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
+  const [tries, setTries] = useState(0);
 
   useEffect(() => {
+    if (!active) return;
     let live = true;
     void loadPhoto(issueId, photo.id).then((u) => {
       if (!live) return;
@@ -404,17 +457,22 @@ function IssuePhotoThumb({
     return () => {
       live = false;
     };
-  }, [issueId, photo.id, loadPhoto]);
+  }, [active, issueId, photo.id, loadPhoto, tries]);
 
   const box = 'h-20 w-20 rounded-xl border-2 border-black';
   if (failed) {
     return (
-      <div
-        className={`${box} flex items-center justify-center border-dashed bg-gray-100 p-1 text-center text-xs font-bold text-gray-600`}
+      <button
+        type="button"
+        onClick={() => {
+          setFailed(false);
+          setTries((n) => n + 1);
+        }}
+        className={`${box} flex items-center justify-center border-dashed bg-gray-100 p-1 text-center text-xs font-bold text-gray-700 hover:bg-yellow-100 focus:outline-none focus-visible:ring-4 focus-visible:ring-pink-400 focus-visible:ring-offset-2`}
         data-testid="founder-issue-photo-failed"
       >
-        Photo did not load
-      </div>
+        Try loading photo again
+      </button>
     );
   }
   if (!url) {

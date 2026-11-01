@@ -147,6 +147,19 @@ describe('<FounderFeedbackPage />', () => {
     render(<FounderFeedbackPage />);
     await waitFor(() => expect(screen.getByText('Enter the passcode')).toBeInTheDocument());
     expect(sessionStorage.getItem('fh-founder-token')).toBeNull();
+    expect(screen.getByTestId('founder-notice')).toHaveTextContent(
+      'Your admin pass ran out. Enter the passcode again.',
+    );
+  });
+
+  it('does not say the pass ran out when the founder taps Lock', async () => {
+    sessionStorage.setItem('fh-founder-token', 'tok');
+    fetchMock.mockResolvedValueOnce(json({ rows: ROWS }));
+    render(<FounderFeedbackPage />);
+    await waitFor(() => expect(screen.getByTestId('founder-sign-out')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('founder-sign-out'));
+    expect(screen.getByText('Enter the passcode')).toBeInTheDocument();
+    expect(screen.queryByTestId('founder-notice')).toBeNull();
   });
 
   it('says so when the server cannot be reached', async () => {
@@ -219,6 +232,9 @@ describe('<FounderFeedbackPage />', () => {
     render(<FounderFeedbackPage />);
     await waitFor(() => expect(screen.getByText('Enter the passcode')).toBeInTheDocument());
     expect(sessionStorage.getItem('fh-founder-token')).toBeNull();
+    expect(screen.getByTestId('founder-notice')).toHaveTextContent(
+      'Your admin pass ran out. Enter the passcode again.',
+    );
   });
 
   // FHS-675: the visual view.

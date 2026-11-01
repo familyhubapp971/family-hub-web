@@ -65,12 +65,20 @@ export function FounderFeedbackPage() {
   const [token, setToken] = useState<string | null>(readToken);
   const [rows, setRows] = useState<FeedbackRow[] | null>(null);
   const [loadError, setLoadError] = useState('');
+  // FHS-717: why the passcode box is back, when the server turned the pass down.
+  const [notice, setNotice] = useState('');
 
   const signOut = useCallback(() => {
     writeToken(null);
     setToken(null);
     setRows(null);
+    setNotice('');
   }, []);
+
+  const passRanOut = useCallback(() => {
+    signOut();
+    setNotice('Your admin pass ran out. Enter the passcode again.');
+  }, [signOut]);
 
   useEffect(() => {
     if (!token) return;
@@ -79,7 +87,7 @@ export function FounderFeedbackPage() {
     fetch(`${API_BASE}/api/founder/feedback`, { headers: { 'x-founder-token': token } })
       .then(async (res) => {
         if (cancelled) return;
-        if (res.status === 401) return signOut();
+        if (res.status === 401) return passRanOut();
         if (!res.ok) throw new Error(String(res.status));
         const body = (await res.json()) as { rows: FeedbackRow[] };
         if (!cancelled) setRows(body.rows);
@@ -90,7 +98,7 @@ export function FounderFeedbackPage() {
     return () => {
       cancelled = true;
     };
-  }, [token, signOut]);
+  }, [token, passRanOut]);
 
   return (
     <div className="flex min-h-screen flex-col bg-kingdom-bg px-4 py-6 text-white sm:px-6">
@@ -110,15 +118,17 @@ export function FounderFeedbackPage() {
           // FHS-674: the passcode box sits in the middle of the space below the title.
           <div className="flex flex-1 items-center justify-center pb-16" data-testid="founder-lock">
             <PasscodeForm
+              notice={notice}
               onUnlocked={(t) => {
                 writeToken(t);
+                setNotice('');
                 setToken(t);
               }}
             />
           </div>
         ) : (
           <div className="space-y-8">
-            <IssuesToFix token={token} onUnauthorized={signOut} />
+            <IssuesToFix token={token} onUnauthorized={passRanOut} />
             {loadError ? (
               <p
                 role="alert"
@@ -140,7 +150,14 @@ export function FounderFeedbackPage() {
   );
 }
 
-function PasscodeForm({ onUnlocked }: { onUnlocked: (token: string) => void }) {
+function PasscodeForm({
+  notice,
+  onUnlocked,
+}: {
+  /** Shown above the box when the page locked itself, saying why. */
+  notice: string;
+  onUnlocked: (token: string) => void;
+}) {
   const [passcode, setPasscode] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -186,6 +203,15 @@ function PasscodeForm({ onUnlocked }: { onUnlocked: (token: string) => void }) {
       onSubmit={submit}
       className="mx-auto w-full max-w-sm rounded-2xl border-2 border-black bg-white p-5 text-black shadow-neo sm:p-6"
     >
+      {notice && (
+        <p
+          role="alert"
+          className="mb-3 rounded-xl border-2 border-black bg-pastel-yellow p-3 text-sm font-bold"
+          data-testid="founder-notice"
+        >
+          {notice}
+        </p>
+      )}
       <label htmlFor="founder-passcode" className="mb-3 block font-heading text-xl">
         Enter the passcode
       </label>
