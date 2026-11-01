@@ -1,6 +1,7 @@
 # Feature: Change your own sign-in email
 
-**Jira:** [FHS-510](https://qualicion2.atlassian.net/browse/FHS-510)
+**Jira:** [FHS-510](https://qualicion2.atlassian.net/browse/FHS-510),
+[FHS-714](https://qualicion2.atlassian.net/browse/FHS-714) (expired-link wording)
 **Status:** shipped
 **Owner:** product-manager
 
@@ -95,6 +96,7 @@ prefetched link can never spend the confirmation on my behalf.
 - **When** I tap "Confirm email change"
 - **Then** I see "This link has expired" with no email address shown
 - **And** nothing about my account is changed
+- **And** I am told to open Manage family from my profile menu and choose Change email again (FHS-714; it used to say "ask an admin", who cannot change my email)
 
 **Scenario: A transient failure shows a retryable error, not "expired"**
 
