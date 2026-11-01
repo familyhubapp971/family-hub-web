@@ -556,7 +556,9 @@ Rules learned the hard way:
 The full browser run (after each merge to `staging`) signs in for real as
 `e2e@familyhub.test`, the only account on staging with a password. Its
 details live in the web repo's GitHub secrets `E2E_AUTH_USER_EMAIL` and
-`E2E_AUTH_USER_PASSWORD`. To replace the password, write a bcrypt hash of a
+`E2E_AUTH_USER_PASSWORD`. The api refuses password sign-in for every other
+address: only those listed in `PASSWORD_SIGNIN_EMAILS` on the staging api
+(`e2e@familyhub.test`) may use one (FHS-704). To replace the password, write a bcrypt hash of a
 new one into `auth.users.encrypted_password` for that address on the
 staging database, then update the secret. The quick run on every pull
 request needs no account and no secret.
