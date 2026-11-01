@@ -16,7 +16,10 @@ import { LoadingScreen } from '../components/LoadingScreen';
 // Cleanup tracked under FHS-205 (drop legacy un-prefixed routes once
 // AuthCallback resolves the tenant itself).
 
-const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+// The server's limit is 30 characters (public-tenant.ts); the box stops there
+// too, so nobody types an address the server will refuse.
+const SLUG_MAX = 30;
+const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{0,28}[a-z0-9])?$/;
 
 interface MeResponse {
   tenants?: Array<{ slug: string }>;
@@ -36,7 +39,7 @@ export function cleanSlugInput(raw: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+/, '')
-    .slice(0, 63);
+    .slice(0, SLUG_MAX);
 }
 
 /** The address as saved: no hyphen left at the end. */
@@ -45,15 +48,20 @@ function finishSlug(slug: string): string {
 }
 
 function deriveSlug(name: string): string {
-  return name
-    .toLowerCase()
-    .trim()
-    .replace(/&/g, ' and ')
-    .replace(/[^a-z0-9\s-]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 30);
+  return (
+    name
+      .toLowerCase()
+      // "Müller" becomes "muller", not "mller".
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+      .replace(/&/g, ' and ')
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 30)
+  );
 }
 
 export function LegacyDashboardRedirect() {
@@ -254,11 +262,13 @@ function CreateFamilyPanel({ session }: CreateFamilyPanelProps) {
               Family URL
             </label>
             <div className="flex items-center gap-2 font-body text-sm">
-              <span className="text-gray-500">familyhub.app/t/</span>
+              {/* The site's real address, not a domain we do not own. */}
+              <span className="text-gray-500">{window.location.host}/t/</span>
               <input
                 id="no-tenant-slug"
                 type="text"
                 value={effectiveSlug}
+                maxLength={SLUG_MAX}
                 autoCapitalize="none"
                 autoCorrect="off"
                 spellCheck={false}

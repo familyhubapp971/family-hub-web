@@ -191,5 +191,27 @@ describe('<LegacyDashboardRedirect />', () => {
       const lastCall = mocks.fetchMock.mock.calls.at(-1)!;
       expect(JSON.parse((lastCall[1] as RequestInit).body as string).slug).toBe('oyin26');
     });
+
+    it("FHS-714: keeps the address within the server's 30 characters", async () => {
+      renderRoute();
+      await waitFor(() => expect(screen.getByTestId('no-tenant-create-form')).toBeInTheDocument());
+      fireEvent.change(screen.getByTestId('no-tenant-slug'), { target: { value: 'a'.repeat(40) } });
+      expect((screen.getByTestId('no-tenant-slug') as HTMLInputElement).value).toHaveLength(30);
+    });
+
+    it('FHS-714: keeps accented letters in the suggested address', async () => {
+      renderRoute();
+      await waitFor(() => expect(screen.getByTestId('no-tenant-create-form')).toBeInTheDocument());
+      fireEvent.change(screen.getByTestId('no-tenant-family-name'), {
+        target: { value: 'Müller' },
+      });
+      expect((screen.getByTestId('no-tenant-slug') as HTMLInputElement).value).toBe('muller');
+    });
+
+    it("FHS-714: shows the site's real address in front of the box", async () => {
+      renderRoute();
+      await waitFor(() => expect(screen.getByTestId('no-tenant-create-form')).toBeInTheDocument());
+      expect(screen.getByText(`${window.location.host}/t/`)).toBeInTheDocument();
+    });
   });
 });
