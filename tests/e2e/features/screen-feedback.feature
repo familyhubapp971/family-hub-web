@@ -31,6 +31,8 @@ Feature: Feedback on each screen
     When I open Feedback on this screen
     Then the feedback form fits the screen
     And the header and close button of the feedback form are on screen
+    And the issue report is at the top of the feedback form
+    And the Add photos button is big enough to tap
 
   @critical @authed-local
   Scenario: The feedback button works on a tablet
@@ -42,6 +44,21 @@ Feature: Feedback on each screen
     And the page has no sideways scrolling
     When I open Feedback on this screen
     Then the feedback form fits the screen
+
+  # FHS-717: needs the server half of FHS-717 (family-hub-api) to be on staging.
+  @critical @authed-local
+  Scenario: Parent reports an issue with a photo
+
+    Given I am signed in as the admin of a freshly seeded family
+    And I am on a phone-sized screen
+    When I open the Meals screen
+    And I open Feedback on this screen
+    And I write "The Add meal button does nothing" under What went wrong
+    And I add a photo of the problem
+    Then I see the photo ready to send
+    And the page has no sideways scrolling
+    When I send the feedback
+    Then I see the thank-you message
 
   @critical @authed-local
   Scenario: A bubble reminds parents they can give feedback on each screen
