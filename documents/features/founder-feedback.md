@@ -32,24 +32,29 @@ The first section after the passcode, above the filters and At a glance. It
 loads on its own, so it still shows if the feedback list fails to load, and
 the other way round. The Where from, Family and Screen filters do not apply to it.
 
-| Part            | What it shows                                                                                                                      |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Title           | "Issues to fix" and the number still New.                                                                                          |
-| New and Fixed   | Two choices, each with its count. New is chosen when the page opens.                                                               |
-| Each card       | The screen's name (its own key if the app does not know it), family, the person's name and email, when, and what went wrong.       |
-| When            | "2 hours ago", with the full date and time when the pointer rests on it. Fixed cards also say when they were fixed.                |
-| Photos          | Small pictures. Tapping one opens it large; Close or the Escape key shuts it.                                                      |
-| One button      | **Mark fixed** on a New card, **Reopen** on a Fixed one. The card moves straight away.                                             |
-| If saving fails | The card moves back, with "Could not mark that issue fixed. Please try again." or "Could not reopen that issue. Please try again." |
-| Empty           | "No issues to fix. Nice." under New, "Nothing marked fixed yet." under Fixed.                                                      |
-| Loading         | Two grey cards the shape of the real ones.                                                                                         |
-| Cannot load     | "Could not load issues. Check your connection." with a **Try again** button.                                                       |
+| Part            | What it shows                                                                                                                                                                         |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Title           | "Issues to fix" and the number still New.                                                                                                                                             |
+| New and Fixed   | Two choices, each with its count. New is chosen when the page opens.                                                                                                                  |
+| Each card       | The screen's name (its own key if the app does not know it), family, the person's name and email, when, and what went wrong.                                                          |
+| When            | "2 hours ago", with the full date and time when the pointer rests on it. Fixed cards also say when they were fixed.                                                                   |
+| Photos          | Small pictures, downloaded only when the card is near the screen. Tapping one opens it large; Close or the Escape key shuts it. A photo that fails shows **Try loading photo again**. |
+| One button      | **Mark fixed** on a New card, **Reopen** on a Fixed one. The card moves straight away, and the keyboard moves to the next card's button (or to New and Fixed when none is left).      |
+| If saving fails | The card moves back, with "Could not mark that issue fixed. Please try again." or "Could not reopen that issue. Please try again."                                                    |
+| Empty           | "No issues to fix. Nice." under New, "Nothing marked fixed yet." under Fixed.                                                                                                         |
+| Loading         | Two grey cards the shape of the real ones.                                                                                                                                            |
+| Cannot load     | "Could not load issues. Check your connection." with a **Try again** button.                                                                                                          |
 
 Photos only load with the founder pass, so each one is fetched with it and
 shown from a short-lived address in the browser. Each photo is fetched once,
 even when switching between New and Fixed, and all are let go of when the page
-closes or is locked. If the pass runs out while reading issues, the page locks
-as it does for the feedback.
+closes or is locked. Long family names and emails wrap inside the card on a
+phone.
+
+If the server turns the pass down (for the list, a photo, or Mark fixed and
+Reopen), the page goes back to the passcode box and says "Your admin pass ran
+out. Enter the passcode again." The feedback list does the same. Tapping Lock
+goes back without that message.
 
 ## Acceptance criteria
 
@@ -88,6 +93,18 @@ as it does for the feedback.
 
 - **Given** every issue is fixed
 - **Then** New says "No issues to fix. Nice."
+
+**Scenario: The admin pass runs out**
+
+- **Given** the founder's 8-hour pass has ended
+- **When** the page asks the server for issues, a photo or a change
+- **Then** the passcode box comes back with "Your admin pass ran out. Enter the passcode again."
+
+**Scenario: A photo does not load**
+
+- **Given** a photo fails to download
+- **When** the founder taps "Try loading photo again"
+- **Then** the photo is fetched again
 
 **Scenario: Founder sees the headline numbers first**
 
@@ -161,4 +178,5 @@ screenshot, not by an automated test.
 - Separate logins per team member. Everyone shares the one passcode.
 - Replying to feedback from the page.
 - Replying to an issue report, or telling the parent it was fixed.
+- Closing the large photo with the browser's back button. The shared pop-up window does not listen to it anywhere in the app; Close and Escape do.
 - Issue reports in the spreadsheet download.
