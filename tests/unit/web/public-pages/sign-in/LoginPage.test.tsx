@@ -254,6 +254,31 @@ describe('<LoginPage />', () => {
     expect(String(fetchMock.mock.calls[0]![0])).toMatch(new RegExp(`/kid-members/${slug}$`));
   });
 
+  it.each([
+    ['E29B-41D4', 'e29b-41d4'],
+    ['e29b41d4', 'e29b-41d4'],
+    ['E29B 41D4', 'e29b-41d4'],
+  ])('FHS-715: a kid typing %j finds the family %j', async (typed, code) => {
+    stubKidMembersFetch();
+    renderPage('/login?role=kid');
+    fireEvent.change(screen.getByTestId('login-kid-code'), { target: { value: typed } });
+    fireEvent.submit(screen.getByTestId('login-kid-form'));
+    await waitFor(() => expect(screen.getByTestId('kid-login-avatars')).toBeInTheDocument());
+    const fetchMock = vi.mocked(fetch);
+    expect(String(fetchMock.mock.calls[0]![0])).toMatch(new RegExp(`/kid-members/${code}$`));
+  });
+
+  it('FHS-715: the family-code box shows what a code looks like and where a grown-up finds it', () => {
+    renderPage('/login?role=kid');
+    expect(screen.getByTestId('login-kid-code')).toHaveAttribute('placeholder', 'e29b-41d4');
+    expect(
+      screen.getByText(
+        'Ask a grown-up for your family code. It looks like e29b-41d4 and is on the Members page.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/short name in your family/)).toBeNull();
+  });
+
   it('shows a friendly error for an invalid family code and does not navigate', () => {
     renderPage('/login?role=kid');
     fireEvent.change(screen.getByTestId('login-kid-code'), { target: { value: 'bad code!!' } });

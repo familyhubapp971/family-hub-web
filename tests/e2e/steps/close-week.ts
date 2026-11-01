@@ -14,7 +14,7 @@ const ROWS: ChooserRow[] = ['claim', 'cash', 'save', 'invest', 'withdraw'];
 Given(
   'I am signed in as the admin of a family whose week ends today',
   async ({ authedFamilyClosableWeek }) => {
-    expect(authedFamilyClosableWeek.slug).toMatch(/^e2e-/);
+    expect(authedFamilyClosableWeek.slug).toMatch(/^[0-9a-f]{4}-[0-9a-f]{4}$/);
   },
 );
 

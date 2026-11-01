@@ -114,7 +114,9 @@ export async function seedFamily(options: SeedFamilyOptions = {}): Promise<Seede
   await ensureReaderFunctions();
   const db = getE2eDb();
   const suffix = shortId();
-  const slug = `e2e-${suffix}`;
+  // FHS-715: family addresses are the family's code (e29b-41d4), and the site
+  // sends any other address on a kid page to the family-code step.
+  const slug = `${suffix.slice(0, 4)}-${suffix.slice(4)}`;
   const tenantName = `E2E Test Family ${suffix}`;
   const userId = randomUUID();
   const email = `e2e-${suffix}@example.invalid`;

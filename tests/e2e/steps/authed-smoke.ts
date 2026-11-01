@@ -14,7 +14,7 @@ Given('I am signed in as the admin of a freshly seeded family', async ({ authedF
   // up here with a clear message rather than as a confusing page-content
   // mismatch two steps later.
   expect(authedFamily.tenantId).toBeTruthy();
-  expect(authedFamily.slug).toMatch(/^e2e-/);
+  expect(authedFamily.slug).toMatch(/^[0-9a-f]{4}-[0-9a-f]{4}$/);
 });
 
 When('I open the Manage Family page for that family', async ({ page, authedFamily }) => {
