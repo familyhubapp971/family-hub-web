@@ -55,14 +55,14 @@ jobs:
       FH_API_DIR: ${{ github.workspace }}/.ci-api
       DATABASE_URL: postgres://fh_test:fh_test@localhost:5432/familyhub_test
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with: { version: '${{ env.PNPM_VERSION }}' }
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with: { node-version: '${{ env.NODE_VERSION }}', cache: 'pnpm' }
       - run: pnpm install --frozen-lockfile
       # FHS-688: the browser tests boot the server from family-hub-api.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: familyhubapp971/family-hub-api
           ref: staging
@@ -70,7 +70,7 @@ jobs:
       - run: pnpm --dir .ci-api install --frozen-lockfile
       - name: Cache Playwright browsers
         id: pw-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
@@ -107,7 +107,7 @@ jobs:
         run: pnpm -F @familyhub/e2e exec playwright test --config playwright.config.ts --project "$PROJECT"
       - name: Upload Playwright report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report-${{ matrix.browser }}
           path: tests/e2e/playwright-report/
