@@ -22,18 +22,18 @@ Railway themselves, so the pattern was proven.
 
 **Run GoTrue ourselves on Railway, reached only through our api.**
 
-| Part          | What we chose                                                                                                                                                           |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Server        | GoTrue v2.197.0 (the version Supabase runs), one private Railway service per environment, with no public address                                                        |
-| Data          | GoTrue's tables live in an `auth` schema in our own Postgres, owned by a dedicated `gotrue` role                                                                        |
-| Way in        | The web and phone app call the api at `/auth/v1/*`, which passes requests on to GoTrue. It refuses GoTrue's admin paths and caps bodies at 64 KB                        |
-| Limits        | The api adds what GoTrue lacks: 5 sign-in emails an hour per address, and 5 wrong codes or passwords lock the address for 15 minutes                                    |
-| Trust         | Passes are ES256 signed. The api checks them against GoTrue's public keys (`AUTH_JWKS_URL`) and name (`AUTH_ISSUER`)                                                    |
-| Admin actions | Invites and email change use a one-minute service pass the api signs with GoTrue's own key (`GOTRUE_ADMIN_SIGNING_KEYS`)                                                |
-| Emails        | Resend, from `noreply@fhapp.co`, using the branded templates in `family-hub-api/email-templates` (FHS-703). This needs Railway Pro: the Hobby plan blocks email sending |
-| Google        | The same Google sign-in client as before. Each environment adds its own `/auth/v1/callback` address to it                                                               |
-| Accounts      | Copied across keeping every id (FHS-699), so families, roles and history stay linked and nobody signs up again                                                          |
-| Web           | Keeps the supabase-js library, which speaks GoTrue's language. `VITE_AUTH_URL` points it at the api                                                                     |
+| Part          | What we chose                                                                                                                                                                                   |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Server        | GoTrue v2.197.0 (the version Supabase runs), one private Railway service per environment, with no public address                                                                                |
+| Data          | GoTrue's tables live in an `auth` schema in our own Postgres, owned by a dedicated `gotrue` role                                                                                                |
+| Way in        | The web and phone app call the api at `/auth/v1/*`, which passes requests on to GoTrue. It lets through only the routes the web app uses (no admin or password routes) and caps bodies at 64 KB |
+| Limits        | The api adds what GoTrue lacks: 5 sign-in emails an hour per address, and 5 wrong codes or passwords lock the address for 15 minutes                                                            |
+| Trust         | Passes are ES256 signed. The api checks them against GoTrue's public keys (`AUTH_JWKS_URL`) and name (`AUTH_ISSUER`)                                                                            |
+| Admin actions | Invites and email change use a one-minute service pass the api signs with GoTrue's own key (`GOTRUE_ADMIN_SIGNING_KEYS`)                                                                        |
+| Emails        | Resend, from `noreply@fhapp.co`, using the branded templates in `family-hub-api/email-templates` (FHS-703). This needs Railway Pro: the Hobby plan blocks email sending                         |
+| Google        | The same Google sign-in client as before. Each environment adds its own `/auth/v1/callback` address to it                                                                                       |
+| Accounts      | Copied across keeping every id (FHS-699), so families, roles and history stay linked and nobody signs up again                                                                                  |
+| Web           | Keeps the supabase-js library, which speaks GoTrue's language. `VITE_AUTH_URL` points it at the api                                                                                             |
 
 Rollout: staging switched on 2026-10-31. Production switches in FHS-701,
 only after a backup and the founder's go-ahead. Supabase stays for 30
@@ -60,12 +60,11 @@ Harder:
 
 Follow-ups:
 
-- **Check before production:** GoTrue's password sign-up and password
-  sign-in are still reachable through `/auth/v1/*`, though no screen
-  offers them and ADR 0011 rules them out. Confirm whether this allows
-  setting a password on an address before its owner signs up. If so,
-  block it in the pass-through, keeping password sign-in for the staging
-  test account only.
+- **Passwords blocked (FHS-704, 2026-11-01):** the check found a real gap.
+  An outsider could sign up someone's address with a password and sign in as
+  them once the owner confirmed it. The api now refuses password sign-up,
+  reset, account changes and password sign-in, except addresses listed in
+  `PASSWORD_SIGNIN_EMAILS` (staging lists only the browser-test account).
 - Rename the api's `supabase-admin` module once Supabase is removed.
 
 ## Alternatives considered
