@@ -108,6 +108,24 @@ describe('<KidLoginPage />', () => {
     expect(localStorage.getItem('fh.kid.token')).toBe('kid.jwt.here');
   });
 
+  it("FHS-714: if the parent can't be signed out, the kid is told and not half signed in", async () => {
+    signOut.mockResolvedValueOnce({ error: new Error('Network request failed') });
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ family: { slug: 'khan', name: 'Khan Family' }, kids: KIDS }),
+    );
+    fetchMock.mockResolvedValueOnce(jsonResponse({ token: 'kid.jwt.here' }));
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Khan Family')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /Aisha/ }));
+    typePin('1234');
+    await waitFor(() =>
+      expect(
+        screen.getByText("We couldn't reach Family Hub. Check your signal and try again."),
+      ).toBeInTheDocument(),
+    );
+    expect(localStorage.getItem('fh.kid.token')).toBeNull();
+  });
+
   it('FHS-714: a wrong PIN leaves the parent signed in', async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({ family: { slug: 'khan', name: 'Khan Family' }, kids: KIDS }),

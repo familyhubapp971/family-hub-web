@@ -70,6 +70,7 @@ describe('<LegacyDashboardRedirect />', () => {
       ok: true,
       json: async () => ({ tenants: [] }),
     });
+    mocks.fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ claimed: [] }) });
     renderRoute();
     await waitFor(() => expect(screen.getByTestId('no-tenant-create-form')).toBeInTheDocument());
     // Does NOT bounce to the homepage: the user can now recover in place.
@@ -87,6 +88,29 @@ describe('<LegacyDashboardRedirect />', () => {
     );
     expect(screen.getByTestId('me-retry').textContent).toBe('Try again');
     expect(screen.queryByTestId('no-tenant-create-form')).toBeNull();
+  });
+
+  it('FHS-714: a failed invite check with no family offers a retry, never a second family', async () => {
+    mocks.fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ tenants: [] }) });
+    mocks.fetchMock.mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({}) });
+    renderRoute();
+    await waitFor(() => expect(screen.getByTestId('me-unreachable')).toBeInTheDocument());
+    expect(screen.queryByTestId('no-tenant-create-form')).toBeNull();
+  });
+
+  it('FHS-714: a sign-in the server no longer accepts goes to log in, not an endless retry', async () => {
+    mocks.fetchMock.mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({}) });
+    renderRoute();
+    await waitFor(() => expect(mocks.signOutAll).toHaveBeenCalled());
+    expect(screen.queryByTestId('me-unreachable')).toBeNull();
+  });
+
+  it('FHS-714: the retry card has a way out', async () => {
+    mocks.fetchMock.mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({}) });
+    renderRoute();
+    await waitFor(() => expect(screen.getByTestId('me-log-out')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('me-log-out'));
+    await waitFor(() => expect(mocks.signOutAll).toHaveBeenCalled());
   });
 
   it('FHS-714: no signal offers a retry, not the create-a-family form', async () => {
@@ -129,6 +153,8 @@ describe('<LegacyDashboardRedirect />', () => {
   describe('create-family panel', () => {
     beforeEach(() => {
       mocks.fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ tenants: [] }) });
+      // The invite check answers "none": the create form shows only then.
+      mocks.fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ claimed: [] }) });
     });
 
     it('auto-derives the slug from the family name and submits to /api/public/tenant', async () => {
@@ -276,10 +302,17 @@ describe('<LegacyDashboardRedirect />', () => {
     it('FHS-714: welcomes one-character names, like a family called 李', async () => {
       renderRoute();
       await waitFor(() => expect(screen.getByTestId('no-tenant-create-form')).toBeInTheDocument());
-      fireEvent.change(screen.getByTestId('no-tenant-your-name'), { target: { value: 'Jo' } });
+      fireEvent.change(screen.getByTestId('no-tenant-your-name'), { target: { value: 'B' } });
       fireEvent.change(screen.getByTestId('no-tenant-family-name'), { target: { value: '李' } });
       fireEvent.change(screen.getByTestId('no-tenant-slug'), { target: { value: 'li' } });
-      expect(screen.getByTestId('no-tenant-submit')).not.toBeDisabled();
+      mocks.fetchMock.mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({}) });
+      fireEvent.submit(screen.getByTestId('no-tenant-create-form'));
+      await waitFor(() => expect(screen.getByTestId('tenant-onboarding')).toBeInTheDocument());
+      const lastCall = mocks.fetchMock.mock.calls.at(-1)!;
+      expect(JSON.parse((lastCall[1] as RequestInit).body as string)).toMatchObject({
+        familyName: '李',
+        displayName: 'B',
+      });
     });
   });
 });

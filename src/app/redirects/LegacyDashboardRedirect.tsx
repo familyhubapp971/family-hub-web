@@ -85,6 +85,13 @@ export function LegacyDashboardRedirect() {
         // FHS-714: a failed check says nothing about whether they have a
         // family. Treating it as "no family" offered an existing family the
         // create-a-family form, so it gets a retry instead.
+        if (res.status === 401) {
+          // The server no longer accepts this sign-in: "Try again" would only
+          // repeat it, so start a fresh sign-in instead.
+          await signOutAll();
+          if (!cancelled) setState({ kind: 'redirect', to: '/login' });
+          return;
+        }
         if (!res.ok) {
           if (!cancelled) setState({ kind: 'unreachable' });
           return;
@@ -95,6 +102,7 @@ export function LegacyDashboardRedirect() {
         // the user already has a family of their own: a newly-claimed
         // invite should land them on the inviting family, and skipping
         // the claim would leave their seat pending forever.
+        let claimFailed = false;
         try {
           const claimRes = await fetch(`${API_BASE}/api/invitations/claim`, {
             method: 'POST',
@@ -112,8 +120,17 @@ export function LegacyDashboardRedirect() {
               return;
             }
           }
+          if (!claimRes.ok) claimFailed = true;
         } catch {
-          // Claim is best-effort: fall through.
+          // Claim is best-effort for someone who already has a family.
+          claimFailed = true;
+        }
+        // FHS-714: with no family of their own, a failed invite check may be
+        // hiding the family they were invited to. Offering the create form
+        // would make a second family by mistake, so retry instead.
+        if (!slug && claimFailed) {
+          if (!cancelled) setState({ kind: 'unreachable' });
+          return;
         }
         if (!cancelled) {
           setState(slug ? { kind: 'redirect', to: `/t/${slug}/dashboard` } : { kind: 'no-tenant' });
@@ -135,6 +152,9 @@ export function LegacyDashboardRedirect() {
           setState({ kind: 'loading' });
           setAttempt((n) => n + 1);
         }}
+        onLogOut={() => {
+          void signOutAll().finally(() => setState({ kind: 'redirect', to: '/login' }));
+        }}
       />
     );
   }
@@ -150,7 +170,7 @@ export function LegacyDashboardRedirect() {
   return <LoadingScreen context="redirect" />;
 }
 
-function CouldNotReach({ onRetry }: { onRetry: () => void }) {
+function CouldNotReach({ onRetry, onLogOut }: { onRetry: () => void; onLogOut: () => void }) {
   return (
     <main className="flex min-h-full items-center justify-center bg-kingdom-bg px-4 py-10">
       <Card
@@ -170,6 +190,14 @@ function CouldNotReach({ onRetry }: { onRetry: () => void }) {
         >
           Try again
         </Button>
+        <button
+          type="button"
+          onClick={onLogOut}
+          data-testid="me-log-out"
+          className="mt-3 inline-flex min-h-[44px] items-center font-body text-sm font-bold text-purple-600 underline decoration-2 underline-offset-2"
+        >
+          Log out
+        </button>
       </Card>
     </main>
   );
@@ -196,8 +224,8 @@ function CreateFamilyPanel({ session }: CreateFamilyPanelProps) {
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fName = familyName.trim();
-    // FHS-714: one character is enough (a family called 李, a person called
-    // Jo), the same as the server and the phone app.
+    // FHS-714: one character is enough (a family called 李, a one-letter
+    // name), the same as the server and the phone app.
     if (fName.length < 1) {
       setError('Family name is required.');
       return;

@@ -108,6 +108,18 @@ describe('<AuthCallbackPage />', () => {
     expect(screen.getByTestId('route-marker').textContent).toBe('dashboard');
   });
 
+  it("FHS-714: someone else's old link on a shared laptop gets the normal screen, not 'Continue as'", async () => {
+    authState.session = {
+      access_token: 'live-jwt',
+      user: { id: 'u1', email: 'mum@example.com', user_metadata: {} },
+    };
+    renderAt(
+      '/auth/callback?email=dad%40example.com#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired',
+    );
+    expect(screen.queryByTestId('link-expired-continue')).toBeNull();
+    expect(screen.getByTestId('link-expired-send')).toBeInTheDocument();
+  });
+
   it('FHS-714: with nobody signed in, an old link still signs out and offers a new one', async () => {
     renderAt(
       '/auth/callback#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired',

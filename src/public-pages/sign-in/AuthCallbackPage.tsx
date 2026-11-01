@@ -178,10 +178,21 @@ export function AuthCallbackPage() {
     // FHS-714: wait the moment it takes to know whether they are signed in,
     // so the screen never shows "send a new link" and then swaps.
     if (loading) return <LoadingScreen context="callback" />;
+    const reason = reasonFromError(status.message);
+    const sessionEmail = session?.user?.email;
+    const linkEmail = emailFromLink(searchParams);
+    // "Continue as" only when this was an email link for the person already
+    // signed in. Someone else's link on a shared laptop gets the normal screen,
+    // with the way to a new link of their own.
+    const samePerson =
+      !!sessionEmail &&
+      (!linkEmail || linkEmail.toLowerCase() === sessionEmail.toLowerCase()) &&
+      reason !== 'timed-out' &&
+      reason !== 'google-cancelled';
     return (
       <LinkExpired
-        reason={reasonFromError(status.message)}
-        signedInAs={session?.user?.email}
+        reason={reason}
+        signedInAs={samePerson ? sessionEmail : undefined}
         email={
           emailFromLink(searchParams) ||
           sessionStorage.getItem('fh.signup.email') ||

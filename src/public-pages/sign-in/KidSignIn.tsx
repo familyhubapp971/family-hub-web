@@ -189,8 +189,20 @@ export function KidSignIn({
           // this device only (their phone stays signed in). Making the kid
           // view win instead would not hold: the parent session's "signed
           // in" event on every return to the tab clears the kid token.
-          await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined);
+          // The sign-in library reports a failure by returning it, not by
+          // throwing. If the parent stays signed in, the kid would be thrown
+          // out again later, so stop here and say so.
+          const { error: signOutError } = await supabase.auth
+            .signOut({ scope: 'local' })
+            .catch((err: unknown) => ({ error: err as Error }));
           if (isStale()) return;
+          if (signOutError) {
+            setSubmit({
+              kind: 'error',
+              message: "We couldn't reach Family Hub. Check your signal and try again.",
+            });
+            return;
+          }
           localStorage.setItem('fh.kid.token', body.token);
           navigate(`/t/${slug}/dashboard`);
           return;
