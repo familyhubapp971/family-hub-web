@@ -338,7 +338,7 @@ export function MembersPage() {
             old "How your kids sign in" card was. Grown-ups only. */}
         {ready && GROWN_UP_ROLES.has(status.callerRole) && (
           <div className="mb-6">
-            <KidsSignInCard slug={slug} familyName={familyName} />
+            <KidsSignInCard slug={slug} familyName={familyName} headers={authedHeaders} />
           </div>
         )}
 
@@ -1031,9 +1031,36 @@ function WaitingRow({ member: m, idx, callerIsAdmin, mutate }: WaitingCardProps)
 // with its name at the end, and a button that sets this very tablet up for the
 // kids. Replaces the "How your kids sign in" card (FHS-437 / FHS-513), whose
 // link carried the family's surname.
-function KidsSignInCard({ slug, familyName }: { slug: string; familyName: string | null }) {
+function KidsSignInCard({
+  slug,
+  familyName,
+  headers,
+}: {
+  slug: string;
+  familyName: string | null;
+  headers: Record<string, string> | null;
+}) {
   const navigate = useNavigate();
   const [handOff, setHandOff] = useState<'idle' | 'working' | 'failed'>('idle');
+  // FHS-715: families who signed up before codes had their surname as the
+  // kids' code. Tell them once, here, that the code changed, so a tablet
+  // asking for it is no surprise.
+  const [previousSlug, setPreviousSlug] = useState<string | null>(null);
+  useEffect(() => {
+    if (!headers) return;
+    let cancelled = false;
+    fetch(`${API_BASE}/api/family-address`, { headers })
+      .then((res) => (res.ok ? (res.json() as Promise<{ previousSlug: string | null }>) : null))
+      .then((body) => {
+        if (!cancelled) setPreviousSlug(body?.previousSlug ?? null);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+    // The headers object is rebuilt every draw; the family code is what matters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug]);
   const address = `${window.location.host}${familyAddressPath(
     slug,
     familyName ? familyTitle(familyName) : null,
@@ -1067,6 +1094,15 @@ function KidsSignInCard({ slug, familyName }: { slug: string; familyName: string
           <div className="mt-2">
             <CopyCode code={slug} label="Family code" testId="members-family-code" />
           </div>
+          {previousSlug ? (
+            <p
+              className="mt-3 rounded-xl border-2 border-black bg-pastel-yellow p-3 text-sm font-bold text-gray-800"
+              data-testid="members-code-changed"
+            >
+              New: kids now use this code instead of &ldquo;{previousSlug}&rdquo;. A tablet set up
+              before will ask for it once.
+            </p>
+          ) : null}
         </div>
         <ol className="min-w-0 flex-1 space-y-3" data-testid="members-kids-sign-in-steps">
           <KidLoginStep number="1" title="On the kids' tablet, open Family Hub." />

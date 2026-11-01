@@ -47,6 +47,7 @@ vi.mock('../../../../../src/app/lib/auth-context', () => ({
 
 let membersResponse: { ok: boolean; status?: number; json: () => Promise<unknown> } | null = null;
 let meTenants: Array<{ slug: string; name: string; role: string }> = [];
+let previousSlug: string | null = null;
 
 function installApi() {
   fetchMock.mockImplementation((url: string, init?: RequestInit) => {
@@ -59,6 +60,13 @@ function installApi() {
         ok: true,
         status: 200,
         json: async () => ({ tenants: meTenants }),
+      });
+    }
+    if (/\/api\/family-address$/.test(u)) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ slug: 'e29b-41d4', previousSlug }),
       });
     }
     if (u.includes('/api/dashboard/today')) {
@@ -791,6 +799,24 @@ describe('<MembersPage />', () => {
           `${window.location.host}/t/e29b-41d4/the-smith-family`,
         ),
       );
+    });
+
+    it("tells a family who signed up before codes that the kids' code changed", async () => {
+      membersResponse = adminOnlyList();
+      previousSlug = 'khans';
+      renderAt('/t/e29b-41d4/members');
+      await waitFor(() => expect(screen.getByTestId('members-code-changed')).toBeInTheDocument());
+      expect(screen.getByTestId('members-code-changed')).toHaveTextContent(
+        'New: kids now use this code instead of \u201ckhans\u201d. A tablet set up before will ask for it once.',
+      );
+      previousSlug = null;
+    });
+
+    it('shows no note to a family that always had a code', async () => {
+      membersResponse = adminOnlyList();
+      renderAt('/t/e29b-41d4/members');
+      await waitFor(() => expect(screen.getByTestId('members-kids-sign-in')).toBeInTheDocument());
+      expect(screen.queryByTestId('members-code-changed')).toBeNull();
     });
 
     it('the old link with the surname in it is gone', async () => {
