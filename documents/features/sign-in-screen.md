@@ -11,7 +11,8 @@
 [FHS-237](https://qualicion2.atlassian.net/browse/FHS-237) (the card),
 [FHS-714](https://qualicion2.atlassian.net/browse/FHS-714) (sign-in and sign-up test sweep),
 [FHS-715](https://qualicion2.atlassian.net/browse/FHS-715) (Private family code),
-[FHS-716](https://qualicion2.atlassian.net/browse/FHS-716) (One family per home)
+[FHS-716](https://qualicion2.atlassian.net/browse/FHS-716) (One family per home),
+[FHS-718](https://qualicion2.atlassian.net/browse/FHS-718) (Wrong family address shows a server error)
 **Status:** shipped
 **Owner:** product-manager
 **Design:** Magic Patterns `kudjspxd3xxroueg5jw11o`, `pages/Login.tsx`
@@ -87,12 +88,45 @@ magic link or Google. Kids pick their face and type a PIN.
 - **Given** a signed-in parent opens an old address like /t/smith/members
 - **When** the server says that address was their family's
 - **Then** the same page opens at the family's code
-- **And** anyone else gets the usual "not found" or sign-in, never the family
+- **And** anyone else signed in sees "We can't find that family." (FHS-718), and someone signed out gets the sign-in, never the family
 
 **Scenario: A kid link with a surname asks for the code**
 
 - **Given** a kid opens an old link like /t/smith/kid-login
 - **Then** they land on the step where they type the family code, not on any faces
+
+### Story 4: A wrong family address gets a plain page (FHS-718)
+
+**As a** signed-in parent
+**I want** an old or mistyped family link to tell me plainly that it goes nowhere
+**so that** I am not left on a half-loaded page with a server error, and can get home in one tap.
+
+#### Acceptance criteria
+
+**Scenario: A family code that is not mine shows the can't-find page**
+
+- **Given** a signed-in parent opens /t/e29b-41d4/members
+- **And** e29b-41d4 is not one of their families, whether or not that family exists
+- **Then** they see "We can't find that family." and "The link may be old or mistyped."
+- **And** no family name, member count or server error shows
+- **And** a "Go to my family" button opens their own family's home
+
+**Scenario: An old surname link that does not forward shows the same page**
+
+- **Given** a signed-in parent opens an old address like /t/smith/members
+- **When** the server says it was not their family's address
+- **Then** they see the same "We can't find that family." page
+
+**Scenario: Someone with no family is offered to make one**
+
+- **Given** a signed-in grown-up who belongs to no family opens a family link
+- **Then** the can't-find page's button says "Create your family" and opens the create-a-family step
+
+**Scenario: My own family opens as before**
+
+- **Given** a signed-in parent opens any page of their own family, by code or in capitals
+- **Then** the page opens as before, after the usual loading screen at most
+- **And** kid pages and kid sign-ins behave exactly as before
 
 ## Behaviour as shipped
 
@@ -230,8 +264,8 @@ What shipped on the website. The server half lives in family-hub-api.
   opening `/t/smith/...` is asked about on the server; if the address was their
   family's, the same page opens at the code, with the rest of the address and
   anything after the `?` kept. Anyone else, or someone signed out, sees the
-  usual not-found or sign-in, so a surname never reveals a family. A code typed
-  in capitals opens the same family.
+  usual sign-in, or since FHS-718 the "can't find" page below, so a surname
+  never reveals a family. A code typed in capitals opens the same family.
 - **Kid pages with a surname ask for the code.** `/t/smith/kid-login` goes to
   the "I'm a Kid" family-code step instead of showing faces.
 - **The kid family-code box** shows "e29b-41d4" as its example, with the help
@@ -241,6 +275,39 @@ What shipped on the website. The server half lives in family-hub-api.
 - **Grown-ups get the code on the Members page** in a "Kids' sign-in" card, with
   a button that hands the tablet over to the kids. See
   [family-members.md](family-members.md).
+
+## A wrong family address (FHS-718)
+
+The founder opened a family link with a code no family has. The page showed
+"Your family", "0 members" and "Couldn't load members (server returned 400)".
+Family pages only checked that someone was signed in, never that the family
+was theirs, so each part of the page failed on its own.
+
+- **Every family page checks the family is yours first.** For a signed-in
+  grown-up, the website compares the code in the address with the families
+  they belong to. A match opens the page as before.
+- **No match shows one plain page.** "We can't find that family." with "The
+  link may be old or mistyped." and one yellow button, on the app's purple
+  background. It is a single column that fits a phone, a tablet and a laptop,
+  and the button is full width and at least 44px tall.
+- **The button goes home.** "Go to my family" opens the home of the first
+  family they belong to, the same one sign-in picks. Someone with no family
+  sees "Create your family", which opens the create-a-family step.
+- **It gives nothing away.** A family that does not exist and a family that
+  is not yours get exactly the same page. The website never asks the server
+  about the code in the address; it only checks the person's own list.
+- **Old surname links that do not forward** show the same page, instead of
+  opening a page that would fail.
+- **The list of your families is asked for once per visit** and kept in
+  memory, so moving between your own family's pages does not wait again. This
+  is one extra request on the first family page of a visit. A code not on the
+  list is checked once more before the page says no, so a family you have
+  just made or joined opens straight away.
+- **A failed check never blocks you.** With no signal, or if the server cannot
+  answer, the page opens as it did before. The loading screen shows while the
+  check runs, so the broken page never flashes up.
+- **Kids are unchanged.** Kid pages, kid sign-ins on a shared tablet, and the
+  kid link with a surname behave exactly as before.
 
 ## The phone app (FHS-708)
 
