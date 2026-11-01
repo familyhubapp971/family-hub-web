@@ -179,6 +179,39 @@ the link (FHS-605) with device memory as the fallback (FHS-604).
   parent's session clears the kid sign-in every time the tab comes back to
   the front.
 
+## The phone app (FHS-708)
+
+The app (family-hub-app) offers the same choices with the same words and
+rules as the website, so nobody relearns anything.
+
+- **One screen, not two pages.** "I'm a Parent" and "I'm a Kid" are tabs, and
+  "Create a new family" switches the same card to the sign-up words.
+- **Email links come back to the app** at `familyhub://auth/callback`. That
+  address is on the staging sign-in server's allowed list. Production gets it
+  only when the app is released, with the founder's go-ahead.
+- **Google** opens in a secure in-app browser and returns to the app.
+- **"Check your email!"** has the same 60-second wait before "Resend".
+- **Expired, used or broken links** show the same three reasons and send a
+  fresh link in one tap, to the email the device remembers.
+- **Kids** type the family code once per device; after that they only tap their
+  face and enter the PIN, which checks itself at 4 digits.
+- **A grown-up with no family** creates one in the app, with the website's
+  labels, rules and error lines.
+- **The look is the phone design's.** Magic Patterns "FH Mobile App Branding
+  Kit" v3: the kingdom purple with the FH badge at the top, a white sheet
+  below, a grey switch for "I'm a Parent" and "I'm a Kid", coloured face
+  tiles and a round-key PIN pad. The words stay the website's where the
+  website has them (founder decision, 2026-11-01).
+- **Two additions from the design:** "Open Mail" after a link is sent, and a
+  number pad for the PIN instead of the phone's keyboard.
+- **Google sign-in left open over 5 minutes** is closed by the app on an
+  iPhone, with "That took too long, so we stopped it to keep your account
+  safe. Please try again." (FHS-712, Google sign-in timeout message).
+- **Expo Go cannot finish a grown-up sign-in**, because its return address is
+  not on the allowed list. Test builds can.
+- **The same sweep fixes** apply in the app wherever it has the feature
+  (family-hub-app #2, FHS-714).
+
 ## Out of scope
 
 - Password sign-in. The product is passwordless by decision (ADR 0011).
