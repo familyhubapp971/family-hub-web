@@ -488,7 +488,15 @@ function KidLoginPanel() {
   // error state.
   function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const next = code.trim().toLowerCase();
+    // FHS-714: tidy phone typing, as the create-family form does. Phones
+    // capitalise the first letter, iPhones turn a typed hyphen into a long
+    // dash, and kids type the family name with a space.
+    const next = code
+      .trim()
+      .toLowerCase()
+      .replace(/[\s\u2010-\u2015]+/g, '-')
+      .replace(/-{2,}/g, '-')
+      .replace(/^-+|-+$/g, '');
     if (!SLUG_RE.test(next)) {
       setError("That doesn't look like a family code. Ask a grown-up if you're not sure.");
       return;

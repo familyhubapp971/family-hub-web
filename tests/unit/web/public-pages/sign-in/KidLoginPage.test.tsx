@@ -1,7 +1,12 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { KidLoginPage } from '../../../../../src/public-pages/sign-in/KidLoginPage';
+
+const signOut = vi.fn();
+vi.mock('../../../../../src/app/lib/supabase', () => ({
+  supabase: { auth: { signOut: (...args: unknown[]) => signOut(...args) } },
+}));
 
 // FHS-238: kid log-in page at /t/:slug/kid-login. Loads the family +
 // avatar grid from GET /api/public/kid-members/:slug, lets the kid
@@ -71,11 +76,129 @@ describe('<KidLoginPage />', () => {
     fetchMock = vi.fn();
     global.fetch = fetchMock as unknown as typeof global.fetch;
     localStorage.clear();
+    signOut.mockReset();
+    signOut.mockResolvedValue({ error: null });
   });
 
   afterEach(() => {
     global.fetch = originalFetch;
     vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  function typePin(digits: string) {
+    const inputs = screen.getByTestId('kid-login-pin').querySelectorAll<HTMLInputElement>('input');
+    digits.split('').forEach((d, i) => {
+      fireEvent.change(inputs[i]!, { target: { value: d } });
+    });
+  }
+
+  it('FHS-714: a kid signing in on a tablet signs the parent out of this device only', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ family: { slug: 'khan', name: 'Khan Family' }, kids: KIDS }),
+    );
+    fetchMock.mockResolvedValueOnce(jsonResponse({ token: 'kid.jwt.here' }));
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Khan Family')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /Aisha/ }));
+    typePin('1234');
+    await waitFor(() => expect(screen.getByTestId('route-marker').textContent).toBe('dashboard'));
+    // Only this device: the parent's phone stays signed in.
+    expect(signOut).toHaveBeenCalledWith({ scope: 'local' });
+    expect(localStorage.getItem('fh.kid.token')).toBe('kid.jwt.here');
+  });
+
+  it('FHS-714: a wrong PIN leaves the parent signed in', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ family: { slug: 'khan', name: 'Khan Family' }, kids: KIDS }),
+    );
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'invalid login' }, { status: 401 }));
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Khan Family')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /Aisha/ }));
+    typePin('9999');
+    await waitFor(() => expect(screen.getByTestId('kid-login-error')).toBeInTheDocument());
+    expect(signOut).not.toHaveBeenCalled();
+  });
+
+  it('FHS-714: a link with capitals, /t/Khan/kid-login, uses small letters all the way through', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ family: { slug: 'khan', name: 'Khan Family' }, kids: KIDS }),
+    );
+    fetchMock.mockResolvedValueOnce(jsonResponse({ token: 'kid.jwt.here' }));
+    renderPage('Khan');
+    await waitFor(() => expect(screen.getByText('Khan Family')).toBeInTheDocument());
+    expect(String(fetchMock.mock.calls[0]![0])).toMatch(/\/kid-members\/khan$/);
+    fireEvent.click(screen.getByRole('button', { name: /Aisha/ }));
+    typePin('1234');
+    await waitFor(() => expect(screen.getByTestId('route-marker').textContent).toBe('dashboard'));
+    expect(screen.getByTestId('location-pathname').textContent).toBe('/t/khan/dashboard');
+    const pinBody = JSON.parse((fetchMock.mock.calls[1]![1] as RequestInit).body as string);
+    expect(pinBody.tenantSlug).toBe('khan');
+  });
+
+  it('FHS-714: the PIN boxes come back by themselves when the lockout ends', async () => {
+    // Only the wait timer is faked: faking animation frames as well leaves
+    // the page's animations stuck for the tests that follow.
+    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['setTimeout', 'clearTimeout'] });
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ family: { slug: 'khan', name: 'Khan Family' }, kids: KIDS }),
+    );
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: 'too many attempts' }), {
+        status: 429,
+        headers: { 'content-type': 'application/json', 'Retry-After': '600' },
+      }),
+    );
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Khan Family')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /Aisha/ }));
+    typePin('1234');
+    await waitFor(() => expect(screen.getByTestId('kid-login-locked')).toBeInTheDocument());
+    const lockedInputs = screen.getByTestId('kid-login-pin').querySelectorAll('input');
+    expect(lockedInputs[0]).toBeDisabled();
+
+    await act(async () => {
+      vi.advanceTimersByTime(600_000);
+    });
+
+    expect(screen.queryByTestId('kid-login-locked')).toBeNull();
+    const freshInputs = screen.getByTestId('kid-login-pin').querySelectorAll('input');
+    expect(freshInputs[0]).not.toBeDisabled();
+    expect(freshInputs[0]).toHaveValue('');
+  });
+
+  it('FHS-714: no signal while loading the family says to check it, not "Load failed"', async () => {
+    fetchMock.mockRejectedValueOnce(new TypeError('Load failed'));
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('kid-login-load-error')).toBeInTheDocument());
+    expect(screen.getByTestId('kid-login-load-error').textContent).toBe(
+      "We couldn't reach Family Hub. Check your signal and try again.",
+    );
+  });
+
+  it('FHS-714: no signal while checking the PIN says to check it, not "Load failed"', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ family: { slug: 'khan', name: 'Khan Family' }, kids: KIDS }),
+    );
+    fetchMock.mockRejectedValueOnce(new TypeError('Load failed'));
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Khan Family')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /Aisha/ }));
+    typePin('1234');
+    await waitFor(() => expect(screen.getByTestId('kid-login-error')).toBeInTheDocument());
+    expect(screen.getByTestId('kid-login-error').textContent).toBe(
+      "We couldn't reach Family Hub. Check your signal and try again.",
+    );
+  });
+
+  it('keeps the server status in the words when the family list fails', async () => {
+    fetchMock.mockResolvedValueOnce(new Response('boom', { status: 503 }));
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('kid-login-load-error')).toBeInTheDocument());
+    expect(screen.getByTestId('kid-login-load-error').textContent).toBe(
+      'We couldn’t load the family right now (server returned 503). Try again in a moment.',
+    );
   });
 
   it('renders the avatar grid + family name from GET /api/public/kid-members/:slug', async () => {

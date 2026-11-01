@@ -238,6 +238,22 @@ describe('<LoginPage />', () => {
     await waitFor(() => expect(screen.getByTestId('kid-login-avatars')).toBeInTheDocument());
   });
 
+  it.each([
+    ['Smiths', 'smiths'],
+    ['The Smiths', 'the-smiths'],
+    ['the\u2013smiths', 'the-smiths'],
+    ['The \u2014 Smiths', 'the-smiths'],
+    ['  smiths  ', 'smiths'],
+  ])('FHS-714: tidies phone typing %j in the family code to %j', async (typed, slug) => {
+    stubKidMembersFetch();
+    renderPage('/login?role=kid');
+    fireEvent.change(screen.getByTestId('login-kid-code'), { target: { value: typed } });
+    fireEvent.submit(screen.getByTestId('login-kid-form'));
+    await waitFor(() => expect(screen.getByTestId('kid-login-avatars')).toBeInTheDocument());
+    const fetchMock = vi.mocked(fetch);
+    expect(String(fetchMock.mock.calls[0]![0])).toMatch(new RegExp(`/kid-members/${slug}$`));
+  });
+
   it('shows a friendly error for an invalid family code and does not navigate', () => {
     renderPage('/login?role=kid');
     fireEvent.change(screen.getByTestId('login-kid-code'), { target: { value: 'bad code!!' } });
