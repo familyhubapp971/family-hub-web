@@ -1,6 +1,6 @@
 # 0011: Parent auth is magic-link + Google OAuth (no passwords)
 
-**Status:** accepted
+**Status:** accepted (amended by [0022](0022-own-sign-in-server.md), 2026-11-01: the rule stands, now on our own GoTrue server)
 **Date:** 2026-05-02
 **Jira:** FHS-23 (Public Signup epic) · FHS-224 (auth migration) · FHS-248 (Google OAuth provider)
 

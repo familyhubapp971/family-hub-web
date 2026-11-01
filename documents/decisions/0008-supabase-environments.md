@@ -1,6 +1,6 @@
 # 0008: Supabase environment strategy: separate projects now, branches on Pro
 
-**Status:** accepted
+**Status:** superseded by [0022](0022-own-sign-in-server.md) (2026-11-01)
 **Date:** 2026-04-29
 **Jira:** [FHS-187](https://qualicion2.atlassian.net/browse/FHS-187)
 

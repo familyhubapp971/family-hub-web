@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 import { defineBddConfig } from 'playwright-bdd';
 import { linkApiRepo } from './support/api-repo.js';
 import { e2eTestJwksJson } from './support/auth/test-key.js';
-import { tryResolveSupabaseUrl } from './support/auth/env.js';
+import { LOCAL_AUTH_URL, trustSettings } from './support/auth/env.js';
 
 // See playwright.config.ts for the rationale: inline command-line env
 // vars override the parent process env on child_process spawn, so a
@@ -13,13 +13,10 @@ import { tryResolveSupabaseUrl } from './support/auth/env.js';
 const apiDir = linkApiRepo();
 const apiDatabaseUrl = process.env.DATABASE_URL ?? 'postgres://localhost:5432/familyhub_test';
 
-// FHS-516: see playwright.config.ts for the full rationale (non-throwing
-// lookup so specs that don't use the authed fixture keep working on a
-// machine with no Supabase configured).
-const supabaseUrl = tryResolveSupabaseUrl();
-const apiWebServerEnv = supabaseUrl
-  ? { SUPABASE_URL: supabaseUrl, E2E_TEST_JWKS: e2eTestJwksJson() }
-  : undefined;
+// FHS-516 / FHS-700: the local api trusts only passes signed with the fixed
+// test key, issued as LOCAL_AUTH_ISSUER. Nothing here needs a secret or a
+// real sign-in service, so the signed-in specs run on any machine.
+const apiWebServerEnv = { ...trustSettings(LOCAL_AUTH_URL), E2E_TEST_JWKS: e2eTestJwksJson() };
 
 // Critical-path subset for PR CI: only @critical-tagged scenarios,
 // chromium only, must finish under 5 min. Full matrix runs post-merge
@@ -84,7 +81,9 @@ export default defineConfig({
       // (a local-dev convenience). For e2e the browser MUST hit the local api on
       // :3001, the only one that trusts the test-minted JWT via E2E_TEST_JWKS.
       // Vite gives a real env var priority over .env files.
-      env: { VITE_API_URL: 'http://localhost:3001' },
+      // FHS-700: VITE_AUTH_URL points the sign-in client at the same local api,
+      // so it reads the session the fixture stores under that address's key.
+      env: { VITE_API_URL: LOCAL_AUTH_URL, VITE_AUTH_URL: LOCAL_AUTH_URL },
     },
   ],
 });

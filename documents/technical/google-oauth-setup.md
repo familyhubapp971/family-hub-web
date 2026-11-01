@@ -4,6 +4,14 @@
 **Owner:** the engineer doing the cutover
 **Last verified on staging:** 2026-05-03
 
+> **Since 2026-10-31 (ADR 0022):** staging signs in with Google through our
+> own GoTrue server, not Supabase. Same Google client; its redirect is
+> `https://fh-api-staging.up.railway.app/auth/v1/callback` and its settings
+> are the `GOTRUE_EXTERNAL_GOOGLE_*` values on the staging `gotrue` service.
+> Production adds its own `/auth/v1/callback` at the switch (FHS-701), and the
+> Supabase redirects below are removed 30 days after. See
+> [deployment.md](deployment.md#sign-in-service-gotrue).
+
 Per [ADR 0011](../decisions/0011-magic-link-only-parent-auth.md) parent
 auth supports two co-equal entry points: magic-link and Google OAuth.
 This page documents how the Google side is wired up, so a fresh

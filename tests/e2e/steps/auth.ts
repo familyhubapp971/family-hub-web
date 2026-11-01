@@ -5,11 +5,11 @@ import { MePage } from '../support/pages/MePage';
 
 const { Given, When, Then } = createBdd();
 
-// Synthetic e2e account on Supabase staging. Created out-of-band via
-// the Admin API (see PR #X / FHS-196 PR body). Credentials live in
-// .env.local (local dev) and GH Actions secrets (CI). If either is
-// missing the test throws a clear error instead of silently signing
-// in as the empty string.
+// Synthetic e2e account (e2e@familyhub.test) on our own staging sign-in
+// service, the only account there with a password (FHS-700). Credentials
+// live in .env.local (local dev) and the E2E_AUTH_USER_* GH Actions secrets
+// (CI). If either is missing the test throws a clear error instead of
+// silently signing in as the empty string.
 function e2eUser() {
   const email = process.env['E2E_USER_EMAIL'];
   const password = process.env['E2E_USER_PASSWORD'];
@@ -17,7 +17,7 @@ function e2eUser() {
     throw new Error(
       'E2E_USER_EMAIL and E2E_USER_PASSWORD must be set ' +
         '(.env.local for local runs; GH Actions secrets for CI). ' +
-        'See infra/supabase/README.md for how the e2e user is provisioned.',
+        'See documents/technical/deployment.md for how the e2e account is provisioned.',
     );
   }
   return { email, password };
@@ -56,7 +56,7 @@ Then('I see a greeting with my email', async ({ page }) => {
 
 Then('my user id and account-creation timestamp are visible', async ({ page }) => {
   const me = new MePage(page);
-  // Don't pin the exact id (it's the Supabase auth user id, stable
+  // Don't pin the exact id (it's the sign-in service's account id, stable
   // across runs but env-specific) or the timestamp (created when the
   // user was first provisioned). Just assert the elements are non-empty:
   // proves the mirror row was returned, not a placeholder.
