@@ -30,6 +30,17 @@ function KidLoginMarker() {
   return <div data-testid="route-kid-login">kid-login:{slug}</div>;
 }
 
+// FHS-714: shows the email the login page carried over to /signup.
+function SignupMarker() {
+  const loc = useLocation();
+  const email = (loc.state as { email?: string } | null)?.email ?? '';
+  return (
+    <div data-testid="route-marker" data-email={email}>
+      signup
+    </div>
+  );
+}
+
 function renderPage(initial = '/login') {
   return render(
     <MemoryRouter initialEntries={[initial]}>
@@ -44,7 +55,7 @@ function renderPage(initial = '/login') {
           }
         />
         <Route path="/verify-email" element={<div data-testid="route-marker">verify-email</div>} />
-        <Route path="/signup" element={<div data-testid="route-marker">signup</div>} />
+        <Route path="/signup" element={<SignupMarker />} />
         <Route path="/t/:slug/kid-login" element={<KidLoginMarker />} />
       </Routes>
     </MemoryRouter>,
@@ -142,6 +153,37 @@ describe('<LoginPage />', () => {
     expect(text).toMatch(/too many sign-in links/i);
     expect(text).toMatch(/google/i);
     expect(screen.queryByTestId('route-marker')).toBeNull();
+    // Only "No account found" offers to create a family.
+    expect(screen.queryByTestId('login-create-with-email')).toBeNull();
+  });
+
+  it('FHS-714: "No account found" offers to create a family without retyping the email', async () => {
+    signInWithOtp.mockResolvedValue({ error: { message: 'Signups not allowed for otp' } });
+    renderPage();
+    fireEvent.change(screen.getByTestId('login-email'), {
+      target: { value: 'sarah@example.com' },
+    });
+    fireEvent.submit(screen.getByTestId('login-form'));
+    const button = await screen.findByTestId('login-create-with-email');
+    expect(button.textContent).toBe('Create a family with this email');
+    fireEvent.click(button);
+    const marker = screen.getByTestId('route-marker');
+    expect(marker.textContent).toBe('signup');
+    expect(marker).toHaveAttribute('data-email', 'sarah@example.com');
+  });
+
+  it('FHS-714: the create-a-family offer goes when the email is changed', async () => {
+    signInWithOtp.mockResolvedValue({ error: { message: 'Signups not allowed for otp' } });
+    renderPage();
+    fireEvent.change(screen.getByTestId('login-email'), {
+      target: { value: 'sarah@example.com' },
+    });
+    fireEvent.submit(screen.getByTestId('login-form'));
+    await screen.findByTestId('login-create-with-email');
+    fireEvent.change(screen.getByTestId('login-email'), {
+      target: { value: 'sara@example.com' },
+    });
+    expect(screen.queryByTestId('login-create-with-email')).toBeNull();
   });
 
   it('Google button kicks off signInWithOAuth with provider=google', () => {
