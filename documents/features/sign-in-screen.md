@@ -169,9 +169,16 @@ rules as the website, so nobody relearns anything.
   face and enter the PIN, which checks itself at 4 digits.
 - **A grown-up with no family** creates one in the app, with the website's
   labels, rules and error lines.
-- **The look stays the website's for now.** The phone design in Magic Patterns
-  ("FH Mobile App Branding Kit" v3) has its own sign-in screen; only its app
-  icon and loading screen are built so far, by founder decision on 2026-11-01.
+- **The look is the phone design's.** Magic Patterns "FH Mobile App Branding
+  Kit" v3: the kingdom purple with the FH badge at the top, a white sheet
+  below, a grey switch for "I'm a Parent" and "I'm a Kid", coloured face
+  tiles and a round-key PIN pad. The words stay the website's where the
+  website has them (founder decision, 2026-11-01).
+- **Two additions from the design:** "Open Mail" after a link is sent, and a
+  number pad for the PIN instead of the phone's keyboard.
+- **Google sign-in left open over 5 minutes** is closed by the app on an
+  iPhone, with "That took too long, so we stopped it to keep your account
+  safe. Please try again." (FHS-712, Google sign-in timeout message).
 - **Expo Go cannot finish a grown-up sign-in**, because its return address is
   not on the allowed list. Test builds can.
 
