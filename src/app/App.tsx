@@ -4,6 +4,7 @@ import { BrowserRouter, Navigate, Routes, Route, useParams } from 'react-router-
 import { AuthProvider } from './lib/auth-context';
 import { TenantProvider } from './lib/tenant-context';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { FamilyAddressGate } from './components/FamilyAddressGate';
 import { LoadingScreen } from './components/LoadingScreen';
 import { LandingPage } from '../public-pages/home/LandingPage';
 import { WelcomePage } from '../public-pages/home/WelcomePage';
@@ -92,6 +93,16 @@ function AdminRedirect() {
   return <Navigate to={`/t/${slug}/money`} replace />;
 }
 
+// The family's home, reached at /t/:slug/dashboard and at the family's
+// address with its name at the end (FHS-715).
+const familyDashboard = (
+  <ProtectedRoute allowKid>
+    <TenantProvider>
+      <DashboardPage />
+    </TenantProvider>
+  </ProtectedRoute>
+);
+
 export function App() {
   return (
     <BrowserRouter>
@@ -138,103 +149,105 @@ export function App() {
               credential, verified server-side. */}
             <Route path="/confirm-email/:memberId" element={<ConfirmEmailPage />} />
 
-            {/* FHS-238: kid login. Tenant-scoped (slug in URL) but NOT
-              behind ProtectedRoute: the kid hasn't authenticated yet,
-              that's the whole point. The page reads :slug via useParams
-              directly so it can resolve the family + show the avatar
-              grid. After successful PIN entry the kid lands on
-              /t/:slug/dashboard like any other authenticated user. */}
-            <Route path="/t/:slug/kid-login" element={<KidLoginPage />} />
+            {/* FHS-715: every family page passes through FamilyAddressGate,
+              which forwards an old surname address to the family's code
+              for members only (and sends a kid page to the family-code
+              step). The pages below are its children. */}
+            <Route path="/t/:slug" element={<FamilyAddressGate />}>
+              {/* FHS-238: kid login. Tenant-scoped (slug in URL) but NOT
+                behind ProtectedRoute: the kid hasn't authenticated yet,
+                that's the whole point. The page reads :slug via useParams
+                directly so it can resolve the family + show the avatar
+                grid. After successful PIN entry the kid lands on
+                /t/:slug/dashboard like any other authenticated user. */}
+              <Route path="kid-login" element={<KidLoginPage />} />
 
-            {/* Tenant-scoped pages. The TenantProvider reads :slug from
-              the URL and exposes it to descendants via useTenantSlug(). */}
-            <Route
-              path="/t/:slug/onboarding"
-              element={
-                <ProtectedRoute>
-                  <TenantProvider>
-                    <OnboardingPage />
-                  </TenantProvider>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/t/:slug/dashboard"
-              element={
-                <ProtectedRoute allowKid>
-                  <TenantProvider>
-                    <DashboardPage />
-                  </TenantProvider>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/t/:slug/members"
-              element={
-                <ProtectedRoute>
-                  <TenantProvider>
-                    <MembersPage />
-                  </TenantProvider>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/t/:slug/me"
-              element={
-                <ProtectedRoute>
-                  <TenantProvider>
-                    <MePage />
-                  </TenantProvider>
-                </ProtectedRoute>
-              }
-            />
-            {/* FHS-621: the Admin Panel split into pages named after the job
-                they do. One door each, no tab to guess at. */}
-            <Route
-              path="/t/:slug/money"
-              element={
-                <ProtectedRoute>
-                  <TenantProvider>
-                    <KidsMoneyPage />
-                  </TenantProvider>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/t/:slug/family-settings"
-              element={
-                <ProtectedRoute>
-                  <TenantProvider>
-                    <FamilySettingsPage />
-                  </TenantProvider>
-                </ProtectedRoute>
-              }
-            />
-            {/* The old combined panel. Kept as a redirect so saved links and
-                bookmarks still land somewhere sensible (FHS-621). */}
-            <Route path="/t/:slug/admin" element={<AdminRedirect />} />
-            {/* FHS-512: "Pocket money" reward-config settings screen. */}
-            <Route
-              path="/t/:slug/reward-settings"
-              element={
-                <ProtectedRoute>
-                  <TenantProvider>
-                    <RewardSettingsPage />
-                  </TenantProvider>
-                </ProtectedRoute>
-              }
-            />
-            {/* FHS-268: ChildWorld: a parent views a child's world. */}
-            <Route
-              path="/t/:slug/child/:memberId"
-              element={
-                <ProtectedRoute>
-                  <TenantProvider>
-                    <ChildWorldPage />
-                  </TenantProvider>
-                </ProtectedRoute>
-              }
-            />
+              {/* Tenant-scoped pages. The TenantProvider reads :slug from
+                the URL and exposes it to descendants via useTenantSlug(). */}
+              <Route
+                path="onboarding"
+                element={
+                  <ProtectedRoute>
+                    <TenantProvider>
+                      <OnboardingPage />
+                    </TenantProvider>
+                  </ProtectedRoute>
+                }
+              />
+              <Route path="dashboard" element={familyDashboard} />
+              {/* FHS-715: the family's address with its name at the end
+                (/t/e29b-41d4/the-smith-family), or just the code, opens the
+                family's home. Named pages above and below win over this. */}
+              <Route index element={familyDashboard} />
+              <Route path=":familyName" element={familyDashboard} />
+              <Route
+                path="members"
+                element={
+                  <ProtectedRoute>
+                    <TenantProvider>
+                      <MembersPage />
+                    </TenantProvider>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="me"
+                element={
+                  <ProtectedRoute>
+                    <TenantProvider>
+                      <MePage />
+                    </TenantProvider>
+                  </ProtectedRoute>
+                }
+              />
+              {/* FHS-621: the Admin Panel split into pages named after the job
+                  they do. One door each, no tab to guess at. */}
+              <Route
+                path="money"
+                element={
+                  <ProtectedRoute>
+                    <TenantProvider>
+                      <KidsMoneyPage />
+                    </TenantProvider>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="family-settings"
+                element={
+                  <ProtectedRoute>
+                    <TenantProvider>
+                      <FamilySettingsPage />
+                    </TenantProvider>
+                  </ProtectedRoute>
+                }
+              />
+              {/* The old combined panel. Kept as a redirect so saved links and
+                  bookmarks still land somewhere sensible (FHS-621). */}
+              <Route path="admin" element={<AdminRedirect />} />
+              {/* FHS-512: "Pocket money" reward-config settings screen. */}
+              <Route
+                path="reward-settings"
+                element={
+                  <ProtectedRoute>
+                    <TenantProvider>
+                      <RewardSettingsPage />
+                    </TenantProvider>
+                  </ProtectedRoute>
+                }
+              />
+              {/* FHS-268: ChildWorld: a parent views a child's world. */}
+              <Route
+                path="child/:memberId"
+                element={
+                  <ProtectedRoute>
+                    <TenantProvider>
+                      <ChildWorldPage />
+                    </TenantProvider>
+                  </ProtectedRoute>
+                }
+              />
+            </Route>
 
             {/* Legacy un-prefixed routes: kept as-is for now so existing
               deep links don't 404. Cleanup tracked under FHS-205.

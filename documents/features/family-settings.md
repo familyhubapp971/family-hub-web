@@ -138,6 +138,8 @@ this page's layout and copy closely, with these deliberate changes:
 
 - **The family's web address (slug).** Renaming the family never touches
   the slug; changing the slug itself is not offered anywhere in the app.
+  Since FHS-715 (Private family code) the slug is the private code the server
+  makes, like e29b-41d4, not the surname.
 - **Currency conversion of historical amounts.** Changing the currency
   only changes how future and existing raw numbers are labelled and
   formatted, it never recalculates or converts stored amounts.

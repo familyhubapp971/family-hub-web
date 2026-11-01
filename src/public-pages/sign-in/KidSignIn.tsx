@@ -6,6 +6,7 @@ import { AvatarGrid, PinInput, type AvatarTile } from '@familyhub/ui';
 import { API_BASE } from '../../app/lib/api';
 import { friendlyAuthErrorMessage } from '../../app/lib/auth-errors';
 import { supabase } from '../../app/lib/supabase';
+import { rememberFamilyForKids } from '../../app/lib/family-address';
 
 // FHS-360: the kid sign-in flow (avatar tiles → PIN → kid token), shared by
 // the per-family KidLoginPage and the unified LoginPage "I'm a Kid" view so the
@@ -111,14 +112,7 @@ export function KidSignIn({
           return;
         }
         const body = (await res.json()) as KidListResponse;
-        try {
-          localStorage.setItem(
-            'fh.kid.lastFamily',
-            JSON.stringify({ slug: body.family.slug, name: body.family.name }),
-          );
-        } catch {
-          /* private mode / storage full: non-fatal */
-        }
+        rememberFamilyForKids(body.family.slug, body.family.name);
         setLoad({ kind: 'loaded', family: body.family, kids: body.kids });
         onFamilyLoaded?.(body.family.name);
       } catch (e) {
