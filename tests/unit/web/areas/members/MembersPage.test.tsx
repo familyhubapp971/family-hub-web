@@ -779,13 +779,13 @@ describe('<MembersPage />', () => {
       );
     });
 
-    it("shows the three steps for the kids' tablet", async () => {
+    it("shows the three steps for the kids' device", async () => {
       membersResponse = adminOnlyList();
       renderAt('/t/e29b-41d4/members');
       await waitFor(() => expect(screen.getByTestId('members-kids-sign-in')).toBeInTheDocument());
       const steps = screen.getByTestId('members-kids-sign-in-steps');
       expect(steps.querySelectorAll('li')).toHaveLength(3);
-      expect(steps).toHaveTextContent("On the kids' tablet, open Family Hub.");
+      expect(steps).toHaveTextContent("On your kids' device, open Family Hub.");
       expect(steps).toHaveTextContent('Tap "I\'m a Kid".');
       expect(steps).toHaveTextContent("Type this code. Done, it's never asked again.");
     });
@@ -807,7 +807,7 @@ describe('<MembersPage />', () => {
       renderAt('/t/e29b-41d4/members');
       await waitFor(() => expect(screen.getByTestId('members-code-changed')).toBeInTheDocument());
       expect(screen.getByTestId('members-code-changed')).toHaveTextContent(
-        'New: kids now use this code instead of \u201ckhans\u201d. A tablet set up before will ask for it once.',
+        'New: kids now use this code instead of \u201ckhans\u201d. A device set up before will ask for it once.',
       );
       previousSlug = null;
     });
@@ -840,7 +840,7 @@ describe('<MembersPage />', () => {
       expect(screen.queryByTestId('members-kid-login-url')).toBeNull();
     });
 
-    it('"Hand this tablet to the kids" remembers the family, signs out of this tablet only, and opens kid sign-in', async () => {
+    it('"Hand this device to the kids" remembers the family, signs out of this device only, and opens kid sign-in', async () => {
       membersResponse = adminOnlyList();
       meTenants = [{ slug: 'e29b-41d4', name: 'Smith', role: 'admin' }];
       renderAt('/t/e29b-41d4/members');
@@ -859,7 +859,7 @@ describe('<MembersPage />', () => {
       });
     });
 
-    it('if signing out of the tablet fails, the grown-up stays put and is told to try again', async () => {
+    it('if signing out of the device fails, the grown-up stays put and is told to try again', async () => {
       membersResponse = adminOnlyList();
       signOut.mockResolvedValue({ error: new Error('offline') });
       renderAt('/t/e29b-41d4/members');
@@ -868,7 +868,7 @@ describe('<MembersPage />', () => {
 
       await waitFor(() =>
         expect(screen.getByTestId('members-hand-to-kids-error').textContent).toBe(
-          "We couldn't sign you out of this tablet. Check your signal and try again.",
+          "We couldn't sign you out of this device. Check your signal and try again.",
         ),
       );
       expect(screen.queryByTestId('kid-login-page')).toBeNull();
@@ -1143,7 +1143,7 @@ describe('<MembersPage />', () => {
       expect(JSON.parse(putCall![1].body as string)).toEqual({ pin: '1234' });
     });
 
-    it("FHS-715: after saving a PIN it says the kid is ready and what to type on the kids' tablet", async () => {
+    it("FHS-715: after saving a PIN it says the kid is ready and what to type on the kids' device", async () => {
       membersResponse = listWithKid({ callerRole: 'admin', kidHasPin: false });
       renderAt('/t/e29b-41d4/members');
       await expandKids();
@@ -1163,7 +1163,7 @@ describe('<MembersPage />', () => {
 
       await waitFor(() =>
         expect(screen.getByTestId('members-kid-0-pin-ready').textContent).toBe(
-          "Iman is ready. On the kids' tablet, type e29b-41d4.",
+          "Iman is ready. On your kids' device, type e29b-41d4.",
         ),
       );
     });
