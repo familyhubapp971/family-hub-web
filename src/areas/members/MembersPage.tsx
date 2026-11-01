@@ -25,7 +25,7 @@ import {
   ResultBanner,
   RoleBadge,
 } from '@familyhub/ui';
-import { useAuth } from '../../app/lib/auth-context';
+import { clearKidToken, useAuth } from '../../app/lib/auth-context';
 import { useTenantSlug } from '../../app/lib/tenant-context';
 import { API_BASE } from '../../app/lib/api';
 import { supabase } from '../../app/lib/supabase';
@@ -1046,6 +1046,15 @@ function KidsSignInCard({
   // kids' code. Tell them once, here, that the code changed, so a tablet
   // asking for it is no surprise.
   const [previousSlug, setPreviousSlug] = useState<string | null>(null);
+  const seenKey = `fh.code-change-seen.${slug}`;
+  const [noteSeen, setNoteSeen] = useState(() => {
+    try {
+      return localStorage.getItem(seenKey) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const token = headers?.['Authorization'];
   useEffect(() => {
     if (!headers) return;
     let cancelled = false;
@@ -1058,9 +1067,9 @@ function KidsSignInCard({
     return () => {
       cancelled = true;
     };
-    // The headers object is rebuilt every draw; the family code is what matters.
+    // The headers object is rebuilt every draw; its sign-in and the family are what matter.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slug]);
+  }, [slug, token]);
   const address = `${window.location.host}${familyAddressPath(
     slug,
     familyName ? familyTitle(familyName) : null,
@@ -1072,6 +1081,8 @@ function KidsSignInCard({
   // on a shared tablet (FHS-714).
   const onHandOff = useCallback(async () => {
     setHandOff('working');
+    // Any old kid sign-in on this tablet goes too, so the next kid starts fresh.
+    clearKidToken();
     rememberFamilyForKids(slug, familyName ?? 'your family');
     const { error } = await supabase.auth
       .signOut({ scope: 'local' })
@@ -1094,14 +1105,31 @@ function KidsSignInCard({
           <div className="mt-2">
             <CopyCode code={slug} label="Family code" testId="members-family-code" />
           </div>
-          {previousSlug ? (
-            <p
+          {previousSlug && !noteSeen ? (
+            <div
               className="mt-3 rounded-xl border-2 border-black bg-pastel-yellow p-3 text-sm font-bold text-gray-800"
               data-testid="members-code-changed"
             >
-              New: kids now use this code instead of &ldquo;{previousSlug}&rdquo;. A tablet set up
-              before will ask for it once.
-            </p>
+              <p>
+                New: kids now use this code instead of &ldquo;{previousSlug}&rdquo;. A tablet set up
+                before will ask for it once.
+              </p>
+              <button
+                type="button"
+                data-testid="members-code-changed-ok"
+                className="mt-1 inline-flex min-h-[44px] items-center font-bold text-purple-700 underline"
+                onClick={() => {
+                  setNoteSeen(true);
+                  try {
+                    localStorage.setItem(seenKey, '1');
+                  } catch {
+                    // Private mode: the note simply shows again next time.
+                  }
+                }}
+              >
+                Got it
+              </button>
+            </div>
           ) : null}
         </div>
         <ol className="min-w-0 flex-1 space-y-3" data-testid="members-kids-sign-in-steps">

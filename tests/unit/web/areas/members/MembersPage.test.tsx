@@ -812,6 +812,19 @@ describe('<MembersPage />', () => {
       previousSlug = null;
     });
 
+    it('hides the note for good once a parent taps Got it', async () => {
+      membersResponse = adminOnlyList();
+      previousSlug = 'khans';
+      localStorage.removeItem('fh.code-change-seen.e29b-41d4');
+      renderAt('/t/e29b-41d4/members');
+      await waitFor(() => expect(screen.getByTestId('members-code-changed')).toBeInTheDocument());
+      fireEvent.click(screen.getByTestId('members-code-changed-ok'));
+      expect(screen.queryByTestId('members-code-changed')).toBeNull();
+      expect(localStorage.getItem('fh.code-change-seen.e29b-41d4')).toBe('1');
+      localStorage.removeItem('fh.code-change-seen.e29b-41d4');
+      previousSlug = null;
+    });
+
     it('shows no note to a family that always had a code', async () => {
       membersResponse = adminOnlyList();
       renderAt('/t/e29b-41d4/members');
