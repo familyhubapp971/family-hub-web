@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 
 // FHS-227: bridge from un-prefixed `/dashboard` to the tenant-scoped
 // `/t/<slug>/dashboard`. Covers happy path (first tenant wins), the
@@ -31,9 +31,14 @@ vi.mock('../../../../../src/app/lib/auth-context', () => ({
 
 import { LegacyDashboardRedirect } from '../../../../../src/app/redirects/LegacyDashboardRedirect';
 
+function Location() {
+  return <span data-testid="location">{useLocation().pathname}</span>;
+}
+
 function renderRoute() {
   return render(
     <MemoryRouter initialEntries={['/dashboard']}>
+      <Location />
       <Routes>
         <Route path="/dashboard" element={<LegacyDashboardRedirect />} />
         <Route path="/t/:slug/dashboard" element={<div data-testid="tenant-dashboard" />} />
@@ -157,28 +162,34 @@ describe('<LegacyDashboardRedirect />', () => {
       mocks.fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ claimed: [] }) });
     });
 
-    it('auto-derives the slug from the family name and submits to /api/public/tenant', async () => {
+    async function fillIn(yourName: string, familyName: string) {
+      await waitFor(() => expect(screen.getByTestId('no-tenant-create-form')).toBeInTheDocument());
+      fireEvent.change(screen.getByTestId('no-tenant-your-name'), { target: { value: yourName } });
+      fireEvent.change(screen.getByTestId('no-tenant-family-name'), {
+        target: { value: familyName },
+      });
+    }
+
+    it('FHS-715: asks only for your name and the family name, with no address box', async () => {
       renderRoute();
       await waitFor(() => expect(screen.getByTestId('no-tenant-create-form')).toBeInTheDocument());
-      fireEvent.change(screen.getByTestId('no-tenant-your-name'), {
-        target: { value: 'Sarah' },
-      });
-      fireEvent.change(screen.getByTestId('no-tenant-family-name'), {
-        target: { value: 'The Khan Family' },
-      });
-      expect((screen.getByTestId('no-tenant-slug') as HTMLInputElement).value).toBe(
-        'the-khan-family',
-      );
-      // 201 on tenant create → navigate to onboarding under the chosen slug.
+      expect(screen.getByLabelText('Your name')).toBeInTheDocument();
+      expect(screen.getByLabelText('Family name')).toBeInTheDocument();
+      expect(screen.queryByTestId('no-tenant-slug')).toBeNull();
+      expect(screen.queryByText(/Family URL/i)).toBeNull();
+      expect(screen.queryByText(`${window.location.host}/t/`)).toBeNull();
+    });
+
+    it('FHS-715: sends just the two names, with the sign-in, and no address', async () => {
+      renderRoute();
+      await fillIn('Sarah', 'The Khan Family');
       mocks.fetchMock.mockResolvedValueOnce({
         ok: true,
         status: 201,
-        json: async () => ({ tenant: { slug: 'the-khan-family' } }),
+        json: async () => ({ tenant: { id: 't-1', slug: 'e29b-41d4', name: 'The Khan Family' } }),
       });
       fireEvent.submit(screen.getByTestId('no-tenant-create-form'));
       await waitFor(() => expect(screen.getByTestId('tenant-onboarding')).toBeInTheDocument());
-      // The /api/public/tenant POST carried the existing session token
-      // and the founder's typed name (FHS-274, no metadata guessing).
       expect(mocks.fetchMock).toHaveBeenLastCalledWith(
         expect.stringContaining('/api/public/tenant'),
         expect.objectContaining({
@@ -187,79 +198,53 @@ describe('<LegacyDashboardRedirect />', () => {
         }),
       );
       const lastCall = mocks.fetchMock.mock.calls.at(-1)!;
-      expect(JSON.parse((lastCall[1] as RequestInit).body as string).displayName).toBe('Sarah');
+      expect(JSON.parse((lastCall[1] as RequestInit).body as string)).toEqual({
+        familyName: 'The Khan Family',
+        displayName: 'Sarah',
+      });
     });
 
-    it('shows an inline error and re-enables editing on 409 (slug taken)', async () => {
+    it('FHS-715: opens the new family at the code the server gave it', async () => {
       renderRoute();
-      await waitFor(() => expect(screen.getByTestId('no-tenant-create-form')).toBeInTheDocument());
-      fireEvent.change(screen.getByTestId('no-tenant-your-name'), {
-        target: { value: 'Sarah' },
+      await fillIn('Sarah', 'The Khan Family');
+      mocks.fetchMock.mockResolvedValueOnce({
+        ok: true,
+        status: 201,
+        json: async () => ({ tenant: { id: 't-1', slug: 'e29b-41d4', name: 'The Khan Family' } }),
       });
-      fireEvent.change(screen.getByTestId('no-tenant-family-name'), {
-        target: { value: 'Khans' },
-      });
-      mocks.fetchMock.mockResolvedValueOnce({ ok: false, status: 409, json: async () => ({}) });
       fireEvent.submit(screen.getByTestId('no-tenant-create-form'));
       await waitFor(() =>
-        expect(screen.getByTestId('no-tenant-error').textContent).toMatch(/taken/i),
+        expect(screen.getByTestId('location')).toHaveTextContent('/t/e29b-41d4/onboarding'),
       );
-      // No redirect: user stays on the form to pick another slug.
-      expect(screen.queryByTestId('tenant-onboarding')).toBeNull();
     });
 
-    it('FHS-713: keeps the taken address in the box to edit, instead of emptying it', async () => {
+    it('FHS-716: someone who already made a family is taken to that family, not a second one', async () => {
       renderRoute();
-      await waitFor(() => expect(screen.getByTestId('no-tenant-create-form')).toBeInTheDocument());
-      fireEvent.change(screen.getByTestId('no-tenant-your-name'), { target: { value: 'Tinu' } });
-      fireEvent.change(screen.getByTestId('no-tenant-family-name'), { target: { value: 'Abass' } });
-      mocks.fetchMock.mockResolvedValueOnce({ ok: false, status: 409, json: async () => ({}) });
-      fireEvent.submit(screen.getByTestId('no-tenant-create-form'));
-      await waitFor(() => expect(screen.getByTestId('no-tenant-error')).toBeInTheDocument());
-      expect((screen.getByTestId('no-tenant-slug') as HTMLInputElement).value).toBe('abass');
-    });
-
-    it.each([
-      ['Oyin26', 'oyin26'],
-      ['TAbass1', 'tabass1'],
-      ['Tabb-21', 'tabb-21'],
-      ['Tinu.!12', 'tinu-12'],
-      ['Oyin26–', 'oyin26-'],
-    ])('FHS-713: tidies phone typing %j into %j as it is typed', async (typed, shown) => {
-      renderRoute();
-      await waitFor(() => expect(screen.getByTestId('no-tenant-create-form')).toBeInTheDocument());
-      fireEvent.change(screen.getByTestId('no-tenant-slug'), { target: { value: typed } });
-      expect((screen.getByTestId('no-tenant-slug') as HTMLInputElement).value).toBe(shown);
-    });
-
-    it('FHS-713: creates the family without a hyphen left at the end', async () => {
-      renderRoute();
-      await waitFor(() => expect(screen.getByTestId('no-tenant-create-form')).toBeInTheDocument());
-      fireEvent.change(screen.getByTestId('no-tenant-your-name'), { target: { value: 'Tinu' } });
-      fireEvent.change(screen.getByTestId('no-tenant-family-name'), { target: { value: 'Abass' } });
-      fireEvent.change(screen.getByTestId('no-tenant-slug'), { target: { value: 'Oyin26–' } });
-      expect(screen.getByTestId('no-tenant-slug')).toHaveAttribute('autocapitalize', 'none');
-      mocks.fetchMock.mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({}) });
-      fireEvent.submit(screen.getByTestId('no-tenant-create-form'));
-      await waitFor(() => expect(screen.getByTestId('tenant-onboarding')).toBeInTheDocument());
-      const lastCall = mocks.fetchMock.mock.calls.at(-1)!;
-      expect(JSON.parse((lastCall[1] as RequestInit).body as string).slug).toBe('oyin26');
-    });
-
-    it("FHS-714: keeps the address within the server's 30 characters", async () => {
-      renderRoute();
-      await waitFor(() => expect(screen.getByTestId('no-tenant-create-form')).toBeInTheDocument());
-      fireEvent.change(screen.getByTestId('no-tenant-slug'), { target: { value: 'a'.repeat(40) } });
-      expect((screen.getByTestId('no-tenant-slug') as HTMLInputElement).value).toHaveLength(30);
-    });
-
-    it('FHS-714: keeps accented letters in the suggested address', async () => {
-      renderRoute();
-      await waitFor(() => expect(screen.getByTestId('no-tenant-create-form')).toBeInTheDocument());
-      fireEvent.change(screen.getByTestId('no-tenant-family-name'), {
-        target: { value: 'Müller' },
+      await fillIn('Sarah', 'Khans again');
+      mocks.fetchMock.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ tenant: { id: 't-1', slug: 'a1b2-c3d4', name: 'Khans' } }),
       });
-      expect((screen.getByTestId('no-tenant-slug') as HTMLInputElement).value).toBe('muller');
+      fireEvent.submit(screen.getByTestId('no-tenant-create-form'));
+      await waitFor(() =>
+        expect(screen.getByTestId('location')).toHaveTextContent('/t/a1b2-c3d4/onboarding'),
+      );
+    });
+
+    it('FHS-715: a reply that does not say where the family is checks for it again', async () => {
+      renderRoute();
+      await fillIn('Sarah', 'Khans');
+      mocks.fetchMock.mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({}) });
+      // The second check finds the family that was just made.
+      mocks.fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ tenants: [{ slug: 'e29b-41d4' }] }),
+      });
+      mocks.fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ claimed: [] }) });
+      fireEvent.submit(screen.getByTestId('no-tenant-create-form'));
+      await waitFor(() => expect(screen.getByTestId('tenant-dashboard')).toBeInTheDocument());
+      expect(screen.getByTestId('location')).toHaveTextContent('/t/e29b-41d4/dashboard');
     });
 
     it('FHS-714: tells an invited parent to sign in with the email the invite went to', async () => {
@@ -293,19 +278,16 @@ describe('<LegacyDashboardRedirect />', () => {
       );
     });
 
-    it("FHS-714: shows the site's real address in front of the box", async () => {
-      renderRoute();
-      await waitFor(() => expect(screen.getByTestId('no-tenant-create-form')).toBeInTheDocument());
-      expect(screen.getByText(`${window.location.host}/t/`)).toBeInTheDocument();
-    });
-
     it('FHS-714: welcomes one-character names, like a family called 李', async () => {
       renderRoute();
       await waitFor(() => expect(screen.getByTestId('no-tenant-create-form')).toBeInTheDocument());
       fireEvent.change(screen.getByTestId('no-tenant-your-name'), { target: { value: 'B' } });
       fireEvent.change(screen.getByTestId('no-tenant-family-name'), { target: { value: '李' } });
-      fireEvent.change(screen.getByTestId('no-tenant-slug'), { target: { value: 'li' } });
-      mocks.fetchMock.mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({}) });
+      mocks.fetchMock.mockResolvedValueOnce({
+        ok: true,
+        status: 201,
+        json: async () => ({ tenant: { slug: 'e29b-41d4' } }),
+      });
       fireEvent.submit(screen.getByTestId('no-tenant-create-form'));
       await waitFor(() => expect(screen.getByTestId('tenant-onboarding')).toBeInTheDocument());
       const lastCall = mocks.fetchMock.mock.calls.at(-1)!;

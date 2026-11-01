@@ -17,11 +17,6 @@ import { LoadingScreen } from '../components/LoadingScreen';
 // Cleanup tracked under FHS-205 (drop legacy un-prefixed routes once
 // AuthCallback resolves the tenant itself).
 
-// The server's limit is 30 characters (public-tenant.ts); the box stops there
-// too, so nobody types an address the server will refuse.
-const SLUG_MAX = 30;
-const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{0,28}[a-z0-9])?$/;
-
 interface MeResponse {
   tenants?: Array<{ slug: string }>;
 }
@@ -31,43 +26,6 @@ type State =
   | { kind: 'redirect'; to: string }
   | { kind: 'no-tenant' }
   | { kind: 'unreachable' };
-
-/**
- * FHS-713: tidies a family web address as it is typed on a phone. Capitals
- * become small letters (phones capitalise the first letter on their own), and
- * long dashes (iPhones turn a typed hyphen into one), spaces, dots and symbols
- * become a single hyphen. A hyphen at the start goes; one at the end stays
- * while they are still typing.
- */
-export function cleanSlugInput(raw: string): string {
-  return raw
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+/, '')
-    .slice(0, SLUG_MAX);
-}
-
-/** The address as saved: no hyphen left at the end. */
-function finishSlug(slug: string): string {
-  return slug.replace(/-+$/, '');
-}
-
-function deriveSlug(name: string): string {
-  return (
-    name
-      .toLowerCase()
-      // "Müller" becomes "muller", not "mller".
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .trim()
-      .replace(/&/g, ' and ')
-      .replace(/[^a-z0-9\s-]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 30)
-  );
-}
 
 export function LegacyDashboardRedirect() {
   const { session } = useAuth();
@@ -163,7 +121,15 @@ export function LegacyDashboardRedirect() {
     // hit /dashboard unauthenticated. The ProtectedRoute wrapper would
     // normally have bounced them already, but cover the case anyway.
     if (!session) return <Navigate to="/" replace />;
-    return <CreateFamilyPanel session={session} />;
+    return (
+      <CreateFamilyPanel
+        session={session}
+        onRecheck={() => {
+          setState({ kind: 'loading' });
+          setAttempt((n) => n + 1);
+        }}
+      />
+    );
   }
   // FHS-550: this was near-invisible grey text on the dark background while
   // the family was looked up. It is the shared branded wait now.
@@ -205,21 +171,24 @@ function CouldNotReach({ onRetry, onLogOut }: { onRetry: () => void; onLogOut: (
 
 interface CreateFamilyPanelProps {
   session: Session;
+  /** Checks for the family again, for a reply that did not say where it is. */
+  onRecheck: () => void;
 }
 
-function CreateFamilyPanel({ session }: CreateFamilyPanelProps) {
+interface CreateFamilyResponse {
+  tenant?: { slug?: unknown };
+}
+
+// FHS-715 / FHS-716: people never type a family address any more. The server
+// makes every family's private code and answers with it, and someone who
+// already made a family gets that family back (one family per home), so
+// there is no "address taken" to deal with here.
+function CreateFamilyPanel({ session, onRecheck }: CreateFamilyPanelProps) {
   const navigate = useNavigate();
   const [familyName, setFamilyName] = useState('');
   const [yourName, setYourName] = useState('');
-  const [slug, setSlug] = useState('');
-  const [editingSlug, setEditingSlug] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-
-  // The slug input mirrors the family name until the user edits it
-  // directly. This matches the SignupPage UX so a user who's seen it
-  // before recognises the pattern.
-  const effectiveSlug = editingSlug ? slug : deriveSlug(familyName);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -228,11 +197,6 @@ function CreateFamilyPanel({ session }: CreateFamilyPanelProps) {
     // name), the same as the server and the phone app.
     if (fName.length < 1) {
       setError('Family name is required.');
-      return;
-    }
-    const finalSlug = finishSlug(effectiveSlug);
-    if (!SLUG_RE.test(finalSlug) || finalSlug.length < 2) {
-      setError('Family URL must be 2+ lowercase letters, digits or hyphens.');
       return;
     }
     // FHS-274: the founder types their own name; no more guessing from
@@ -251,19 +215,18 @@ function CreateFamilyPanel({ session }: CreateFamilyPanelProps) {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ familyName: fName, displayName, slug: finalSlug }),
+        body: JSON.stringify({ familyName: fName, displayName }),
       });
+      // 201 is a new family; 200 is the family this person already made.
+      // Both open the family at the code the server gave it.
       if (res.status === 200 || res.status === 201) {
-        navigate(`/t/${finalSlug}/onboarding`, { replace: true });
-        return;
-      }
-      if (res.status === 409) {
-        setError('That family URL is taken. Try a different one.');
-        setSubmitting(false);
-        // FHS-713: keep the taken address in the box to edit, instead of
-        // emptying it (the box used to go blank here).
-        setSlug(finalSlug);
-        setEditingSlug(true);
+        const body = (await res.json().catch(() => ({}))) as CreateFamilyResponse;
+        const slug = body.tenant?.slug;
+        if (typeof slug === 'string' && slug.length > 0) {
+          navigate(`/t/${slug}/onboarding`, { replace: true });
+        } else {
+          onRecheck();
+        }
         return;
       }
       if (res.status === 400) {
@@ -341,31 +304,6 @@ function CreateFamilyPanel({ session }: CreateFamilyPanelProps) {
               placeholder="The Khan family"
               data-testid="no-tenant-family-name"
             />
-          </div>
-          <div>
-            <label className="mb-1 block font-body text-sm font-bold" htmlFor="no-tenant-slug">
-              Family URL
-            </label>
-            <div className="flex items-center gap-2 font-body text-sm">
-              {/* The site's real address, not a domain we do not own. */}
-              <span className="text-gray-500">{window.location.host}/t/</span>
-              <input
-                id="no-tenant-slug"
-                type="text"
-                value={effectiveSlug}
-                maxLength={SLUG_MAX}
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck={false}
-                onChange={(e) => {
-                  setEditingSlug(true);
-                  setSlug(cleanSlugInput(e.target.value));
-                  setError(null);
-                }}
-                className="flex-1 rounded-md border-2 border-black px-3 py-2"
-                data-testid="no-tenant-slug"
-              />
-            </div>
           </div>
           {error !== null && (
             <p
