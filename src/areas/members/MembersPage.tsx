@@ -3,12 +3,12 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Check,
-  Copy,
   Edit2,
   Key,
   Mail,
   Plus,
   Send,
+  Tablet,
   Trash2,
   UserPlus,
 } from 'lucide-react';
@@ -17,15 +17,19 @@ import {
   Button,
   Card,
   CollapsibleSection,
+  CopyCode,
   FormCard,
   Input,
   Label,
   MemberCard,
+  ResultBanner,
   RoleBadge,
 } from '@familyhub/ui';
 import { useAuth } from '../../app/lib/auth-context';
 import { useTenantSlug } from '../../app/lib/tenant-context';
 import { API_BASE } from '../../app/lib/api';
+import { supabase } from '../../app/lib/supabase';
+import { familyAddressPath, rememberFamilyForKids } from '../../app/lib/family-address';
 import { AppHeader } from '../../app/layout/AppHeader';
 import { DEFAULT_TAB } from '../../app/layout/dashboard-tabs';
 import { isKidRole, isPinEligibleRole } from '@familyhub/shared';
@@ -330,11 +334,11 @@ export function MembersPage() {
           </p>
         )}
 
-        {/* FHS-521: "How your kids sign in" sits above the member groups,
-            matching the design's order (header/forms → kid-login → groups). */}
-        {ready && (
+        {/* FHS-715: "Kids' sign-in" sits above the member groups, where the
+            old "How your kids sign in" card was. Grown-ups only. */}
+        {ready && GROWN_UP_ROLES.has(status.callerRole) && (
           <div className="mb-6">
-            <KidLoginHelp slug={slug} kidsCount={kids.length} />
+            <KidsSignInCard slug={slug} familyName={familyName} />
           </div>
         )}
 
@@ -831,6 +835,8 @@ function KidCard({
 }: KidCardProps) {
   const callerCanManagePin = ADMIN_OR_ADULT.has(callerRole) && isPinEligibleRole(m.role);
   const testId = `members-kid-${idx}`;
+  // FHS-715: right after a PIN is saved, say what to do on the kids' tablet.
+  const [pinJustSet, setPinJustSet] = useState(false);
 
   return (
     <MemberCard
@@ -908,12 +914,21 @@ function KidCard({
           slug={slug}
           accessToken={session?.access_token}
           testId={testId}
-          onDone={() => {
+          onDone={(result) => {
+            setPinJustSet(result === 'set');
             setOpenPinFor(null);
             void fetchMembers();
           }}
         />
       )}
+      {/* Always in the page so screen readers hear the line when it appears. */}
+      <div role="status" className={pinJustSet && openPinFor !== m.id ? 'mt-4' : undefined}>
+        {pinJustSet && openPinFor !== m.id && (
+          <ResultBanner testId={`${testId}-pin-ready`}>
+            {m.displayName} is ready. On the kids&apos; tablet, type {slug}.
+          </ResultBanner>
+        )}
+      </div>
     </MemberCard>
   );
 }
@@ -1011,88 +1026,93 @@ function WaitingRow({ member: m, idx, callerIsAdmin, mutate }: WaitingCardProps)
   );
 }
 
-// FHS-437: parent-side counterpart to the self-serve kid login: without
-// this, a parent had no way to find or share the link/code their kid needs
-// to sign in, so a brand-new family's kid had no working path in at all.
-// FHS-513: now a collapsible "How your kids sign in" card with the same
-// link/code + copy button, plus the 3-step walkthrough from the design.
-function KidLoginHelp({ slug, kidsCount }: { slug: string; kidsCount: number }) {
-  const [copied, setCopied] = useState(false);
-  const kidLoginUrl = `${window.location.origin}/t/${slug}/kid-login`;
+// FHS-715: the grown-up's side of kid sign-in. The family's private code in
+// big letters to copy, three steps for the kids' tablet, the family's address
+// with its name at the end, and a button that sets this very tablet up for the
+// kids. Replaces the "How your kids sign in" card (FHS-437 / FHS-513), whose
+// link carried the family's surname.
+function KidsSignInCard({ slug, familyName }: { slug: string; familyName: string | null }) {
+  const navigate = useNavigate();
+  const [handOff, setHandOff] = useState<'idle' | 'working' | 'failed'>('idle');
+  const address = `${window.location.host}${familyAddressPath(
+    slug,
+    familyName ? familyTitle(familyName) : null,
+  )}`;
 
-  const onCopy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(kidLoginUrl);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Clipboard permission blocked / unavailable: the link and code are
-      // still visible on-screen to copy by hand.
+  // Remember this family for kid sign-in on this device, then sign the
+  // grown-up out of this device only (their phone stays signed in), so the
+  // kids can never wander back into grown-up pages. Same as a kid signing in
+  // on a shared tablet (FHS-714).
+  const onHandOff = useCallback(async () => {
+    setHandOff('working');
+    rememberFamilyForKids(slug, familyName ?? 'your family');
+    const { error } = await supabase.auth
+      .signOut({ scope: 'local' })
+      .catch((err: unknown) => ({ error: err as Error }));
+    if (error) {
+      setHandOff('failed');
+      return;
     }
-  }, [kidLoginUrl]);
+    navigate(`/t/${slug}/kid-login`, { replace: true });
+  }, [slug, familyName, navigate]);
 
   return (
-    <CollapsibleSection
-      defaultOpen={false}
-      emoji="🔑"
-      title="How your kids sign in"
-      subtitle={`${kidsCount} kid${kidsCount === 1 ? '' : 's'} use your family code and their own PIN.`}
-      tileClassName="bg-purple-300"
-      testId="members-kid-login-share"
-    >
-      {/* FHS-530: two clear steps, not a misleading 1/2/3 sequence: step 1 is
-          how to REACH the login (a link OR the family code: either opens it),
-          step 2 is what the kid does once there. */}
-      <ol className="space-y-3">
-        <KidLoginStep number="1" title="Open their login page">
-          <p className="mt-1 text-sm font-bold text-gray-500">
-            Send them this link, or have them type your family code on the kid-login page: either
-            one opens it.
-          </p>
-          <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-            <code
-              className="flex min-h-[48px] flex-1 items-center break-all rounded-xl border-2 border-black bg-gray-50 px-3 text-sm font-bold text-gray-800"
-              data-testid="members-kid-login-url"
-            >
-              {kidLoginUrl}
-            </code>
-            <button
-              type="button"
-              onClick={() => void onCopy()}
-              data-testid="members-kid-login-copy"
-              className="flex min-h-[48px] shrink-0 items-center justify-center gap-2 rounded-xl border-2 border-black bg-yellow-300 px-4 text-sm font-bold shadow-neo-xs transition-transform motion-safe:hover:-translate-y-0.5"
-            >
-              {copied ? (
-                <>
-                  <Check size={16} strokeWidth={3} aria-hidden="true" /> Copied
-                </>
-              ) : (
-                <>
-                  <Copy size={16} strokeWidth={3} aria-hidden="true" /> Copy link
-                </>
-              )}
-            </button>
+    <Card testId="members-kids-sign-in" className="bg-white text-gray-900">
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-10">
+        <div className="min-w-0 lg:w-[22rem] lg:shrink-0">
+          <h2 className="flex items-center gap-2 font-heading text-xl text-black">
+            <span aria-hidden="true">🔑</span> Kids&apos; sign-in
+          </h2>
+          <p className="mt-1 text-sm font-bold text-gray-500">Your family code</p>
+          <div className="mt-2">
+            <CopyCode code={slug} label="Family code" testId="members-family-code" />
           </div>
-          <p className="mt-3 text-xs font-bold uppercase tracking-widest text-gray-400">
-            Or your family code
+        </div>
+        <ol className="min-w-0 flex-1 space-y-3" data-testid="members-kids-sign-in-steps">
+          <KidLoginStep number="1" title="On the kids' tablet, open Family Hub." />
+          <KidLoginStep number="2" title={'Tap "I\'m a Kid".'} />
+          <KidLoginStep number="3" title="Type this code. Done, it's never asked again." />
+        </ol>
+      </div>
+      <div className="mt-5 flex flex-col gap-4 border-t-2 border-dashed border-gray-200 pt-4 md:flex-row md:items-end md:justify-between">
+        <div className="min-w-0">
+          <p className="text-xs font-bold uppercase tracking-widest text-gray-400">
+            Your family&apos;s address
           </p>
-          <span
-            className="mt-1 inline-block rounded-xl border-2 border-black bg-purple-100 px-4 py-2 font-heading text-xl tracking-[0.2em]"
-            data-testid="members-kid-login-code"
+          <p
+            className="mt-1 break-all text-sm font-bold text-gray-800"
+            data-testid="members-family-address"
           >
-            {slug}
-          </span>
-        </KidLoginStep>
-        <KidLoginStep number="2" title="They tap their face and enter their PIN">
-          <p className="mt-1 text-sm font-bold text-gray-500">Set each PIN on their card below.</p>
-        </KidLoginStep>
-      </ol>
-    </CollapsibleSection>
+            {address}
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="purple"
+          size="md"
+          disabled={handOff === 'working'}
+          onClick={() => void onHandOff()}
+          testId="members-hand-to-kids"
+          className="min-h-[48px] w-full shrink-0 md:w-auto"
+        >
+          <Tablet size={18} aria-hidden="true" className="mr-2" /> Hand this tablet to the kids
+        </Button>
+      </div>
+      {handOff === 'failed' && (
+        <p
+          className="mt-3 text-sm font-bold text-red-600"
+          role="alert"
+          data-testid="members-hand-to-kids-error"
+        >
+          We couldn&apos;t sign you out of this tablet. Check your signal and try again.
+        </p>
+      )}
+    </Card>
   );
 }
 
-// FHS-521: one numbered step in the "How your kids sign in" card, matching
-// the design (a yellow round number badge + title + content).
+// FHS-521: one numbered step (a yellow round number badge + title + content),
+// used by the "Kids' sign-in" card.
 function KidLoginStep({
   number,
   title,
@@ -1547,7 +1567,8 @@ interface KidPinFormProps {
   slug: string;
   accessToken: string | undefined;
   testId: string;
-  onDone: () => void;
+  /** "set" after a PIN is saved, "removed" after the kid login is taken away. */
+  onDone: (result: 'set' | 'removed') => void;
 }
 
 function KidPinForm({ member, slug, accessToken, testId, onDone }: KidPinFormProps) {
@@ -1592,7 +1613,7 @@ function KidPinForm({ member, slug, accessToken, testId, onDone }: KidPinFormPro
           setSubmitting(false);
           return;
         }
-        onDone();
+        onDone('set');
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Network error. Try again.');
         setSubmitting(false);
@@ -1619,7 +1640,7 @@ function KidPinForm({ member, slug, accessToken, testId, onDone }: KidPinFormPro
         setSubmitting(false);
         return;
       }
-      onDone();
+      onDone('removed');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Network error. Try again.');
       setSubmitting(false);

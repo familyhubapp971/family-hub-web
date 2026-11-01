@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { MembersPage } from '../../../../../src/areas/members/MembersPage';
 import { TenantProvider } from '../../../../../src/app/lib/tenant-context';
 
@@ -28,6 +28,11 @@ const authState: {
   user: { email: 'sarah@example.com', id: 'u-1', user_metadata: {} },
 };
 
+const signOut = vi.fn();
+vi.mock('../../../../../src/app/lib/supabase', () => ({
+  supabase: { auth: { signOut: (...args: unknown[]) => signOut(...args) } },
+}));
+
 vi.mock('../../../../../src/app/lib/auth-context', () => ({
   useAuth: () => authState,
   signOutAll: vi.fn().mockResolvedValue({ error: null }),
@@ -41,6 +46,7 @@ vi.mock('../../../../../src/app/lib/auth-context', () => ({
 // are handled via extra mockResolvedValueOnce calls appended by the test.
 
 let membersResponse: { ok: boolean; status?: number; json: () => Promise<unknown> } | null = null;
+let meTenants: Array<{ slug: string; name: string; role: string }> = [];
 
 function installApi() {
   fetchMock.mockImplementation((url: string, init?: RequestInit) => {
@@ -52,7 +58,7 @@ function installApi() {
       return Promise.resolve({
         ok: true,
         status: 200,
-        json: async () => ({ tenants: [] }),
+        json: async () => ({ tenants: meTenants }),
       });
     }
     if (u.includes('/api/dashboard/today')) {
@@ -77,10 +83,16 @@ function installApi() {
   });
 }
 
+function Where() {
+  return <span data-testid="where">{useLocation().pathname}</span>;
+}
+
 function renderAt(initial: string) {
   return render(
     <MemoryRouter initialEntries={[initial]}>
+      <Where />
       <Routes>
+        <Route path="/t/:slug/kid-login" element={<div data-testid="kid-login-page" />} />
         <Route
           path="/t/:slug/members"
           element={
@@ -105,10 +117,13 @@ async function expandGroup(testId: string) {
 
 const expandGrownups = () => expandGroup('members-group-grownups');
 const expandKids = () => expandGroup('members-group-kids');
-const expandKidLogin = () => expandGroup('members-kid-login-share');
 
 beforeEach(() => {
   membersResponse = null;
+  meTenants = [];
+  signOut.mockReset();
+  signOut.mockResolvedValue({ error: null });
+  localStorage.clear();
   fetchMock.mockReset();
   vi.stubGlobal('fetch', fetchMock);
   authState.session = { access_token: 'fake-jwt' };
@@ -735,47 +750,97 @@ describe('<MembersPage />', () => {
     });
   });
 
-  describe('How your kids sign in', () => {
-    it('shows the kid-login card with the family code + a working copy button', async () => {
+  // FHS-715: the grown-up's side of kid sign-in.
+  describe("Kids' sign-in", () => {
+    it('a grown-up sees the family code in big letters and can copy it', async () => {
       membersResponse = adminOnlyList();
       const writeText = vi.fn().mockResolvedValue(undefined);
       Object.defineProperty(navigator, 'clipboard', {
         value: { writeText },
         configurable: true,
       });
-      renderAt('/t/khans/members');
-      await waitFor(() =>
-        expect(screen.getByTestId('members-kid-login-share')).toBeInTheDocument(),
-      );
-      await expandKidLogin();
+      renderAt('/t/e29b-41d4/members');
+      await waitFor(() => expect(screen.getByTestId('members-kids-sign-in')).toBeInTheDocument());
+      expect(screen.getByText("Kids' sign-in")).toBeInTheDocument();
+      expect(screen.getByTestId('members-family-code-code').textContent).toBe('e29b-41d4');
 
-      expect(screen.getByText('How your kids sign in')).toBeInTheDocument();
-      expect(screen.getByTestId('members-kid-login-code').textContent).toBe('khans');
-      expect(screen.getByTestId('members-kid-login-url').textContent).toContain(
-        '/t/khans/kid-login',
-      );
-
-      fireEvent.click(screen.getByTestId('members-kid-login-copy'));
+      fireEvent.click(screen.getByTestId('members-family-code-copy'));
+      await waitFor(() => expect(writeText).toHaveBeenCalledWith('e29b-41d4'));
       await waitFor(() =>
-        expect(writeText).toHaveBeenCalledWith(expect.stringContaining('/t/khans/kid-login')),
-      );
-      await waitFor(() =>
-        expect(screen.getByTestId('members-kid-login-copy').textContent).toContain('Copied'),
+        expect(screen.getByTestId('members-family-code-copy').textContent).toContain('Copied'),
       );
     });
 
-    it('is collapsible', async () => {
+    it("shows the three steps for the kids' tablet", async () => {
       membersResponse = adminOnlyList();
-      renderAt('/t/khans/members');
+      renderAt('/t/e29b-41d4/members');
+      await waitFor(() => expect(screen.getByTestId('members-kids-sign-in')).toBeInTheDocument());
+      const steps = screen.getByTestId('members-kids-sign-in-steps');
+      expect(steps.querySelectorAll('li')).toHaveLength(3);
+      expect(steps).toHaveTextContent("On the kids' tablet, open Family Hub.");
+      expect(steps).toHaveTextContent('Tap "I\'m a Kid".');
+      expect(steps).toHaveTextContent("Type this code. Done, it's never asked again.");
+    });
+
+    it("shows the family's address with the family name at the end", async () => {
+      membersResponse = adminOnlyList();
+      meTenants = [{ slug: 'e29b-41d4', name: 'Smith', role: 'admin' }];
+      renderAt('/t/e29b-41d4/members');
       await waitFor(() =>
-        expect(screen.getByTestId('members-kid-login-share')).toBeInTheDocument(),
+        expect(screen.getByTestId('members-family-address').textContent).toBe(
+          `${window.location.host}/t/e29b-41d4/the-smith-family`,
+        ),
       );
-      // Starts collapsed (FHS-522): the body isn't in the DOM yet.
-      expect(screen.queryByTestId('members-kid-login-url')).not.toBeInTheDocument();
-      fireEvent.click(screen.getByTestId('members-kid-login-share-toggle'));
-      expect(screen.getByTestId('members-kid-login-url')).toBeInTheDocument();
-      fireEvent.click(screen.getByTestId('members-kid-login-share-toggle'));
-      expect(screen.queryByTestId('members-kid-login-url')).not.toBeInTheDocument();
+    });
+
+    it('the old link with the surname in it is gone', async () => {
+      membersResponse = adminOnlyList();
+      renderAt('/t/e29b-41d4/members');
+      await waitFor(() => expect(screen.getByTestId('members-kids-sign-in')).toBeInTheDocument());
+      expect(screen.queryByText('How your kids sign in')).toBeNull();
+      expect(screen.queryByTestId('members-kid-login-url')).toBeNull();
+    });
+
+    it('"Hand this tablet to the kids" remembers the family, signs out of this tablet only, and opens kid sign-in', async () => {
+      membersResponse = adminOnlyList();
+      meTenants = [{ slug: 'e29b-41d4', name: 'Smith', role: 'admin' }];
+      renderAt('/t/e29b-41d4/members');
+      await waitFor(() => expect(screen.getByTestId('members-hand-to-kids')).toBeInTheDocument());
+      await waitFor(() =>
+        expect(screen.getByTestId('members-family-address').textContent).toContain('smith'),
+      );
+      fireEvent.click(screen.getByTestId('members-hand-to-kids'));
+
+      await waitFor(() => expect(screen.getByTestId('kid-login-page')).toBeInTheDocument());
+      expect(screen.getByTestId('where').textContent).toBe('/t/e29b-41d4/kid-login');
+      expect(signOut).toHaveBeenCalledWith({ scope: 'local' });
+      expect(JSON.parse(localStorage.getItem('fh.kid.lastFamily') ?? 'null')).toEqual({
+        slug: 'e29b-41d4',
+        name: 'Smith',
+      });
+    });
+
+    it('if signing out of the tablet fails, the grown-up stays put and is told to try again', async () => {
+      membersResponse = adminOnlyList();
+      signOut.mockResolvedValue({ error: new Error('offline') });
+      renderAt('/t/e29b-41d4/members');
+      await waitFor(() => expect(screen.getByTestId('members-hand-to-kids')).toBeInTheDocument());
+      fireEvent.click(screen.getByTestId('members-hand-to-kids'));
+
+      await waitFor(() =>
+        expect(screen.getByTestId('members-hand-to-kids-error').textContent).toBe(
+          "We couldn't sign you out of this tablet. Check your signal and try again.",
+        ),
+      );
+      expect(screen.queryByTestId('kid-login-page')).toBeNull();
+      expect(screen.getByTestId('where').textContent).toBe('/t/e29b-41d4/members');
+    });
+
+    it('a child looking at the page does not see the family code', async () => {
+      membersResponse = listWithKid({ callerRole: 'child', kidHasPin: false });
+      renderAt('/t/e29b-41d4/members');
+      await waitFor(() => expect(screen.getByTestId('members-group-kids')).toBeInTheDocument());
+      expect(screen.queryByTestId('members-kids-sign-in')).toBeNull();
     });
   });
 
@@ -1037,6 +1102,49 @@ describe('<MembersPage />', () => {
       );
       expect(putCall).toBeDefined();
       expect(JSON.parse(putCall![1].body as string)).toEqual({ pin: '1234' });
+    });
+
+    it("FHS-715: after saving a PIN it says the kid is ready and what to type on the kids' tablet", async () => {
+      membersResponse = listWithKid({ callerRole: 'admin', kidHasPin: false });
+      renderAt('/t/e29b-41d4/members');
+      await expandKids();
+      await waitFor(() =>
+        expect(screen.getByTestId('members-kid-0-pin-toggle')).toBeInTheDocument(),
+      );
+      fireEvent.click(screen.getByTestId('members-kid-0-pin-toggle'));
+      fireEvent.change(screen.getByTestId('members-kid-0-pin-input'), {
+        target: { value: '1234' },
+      });
+      fireEvent.change(screen.getByTestId('members-kid-0-pin-confirm'), {
+        target: { value: '1234' },
+      });
+      fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ member: {} }) });
+      fetchMock.mockResolvedValueOnce(listWithKid({ callerRole: 'admin', kidHasPin: true }));
+      fireEvent.click(screen.getByTestId('members-kid-0-pin-save'));
+
+      await waitFor(() =>
+        expect(screen.getByTestId('members-kid-0-pin-ready').textContent).toBe(
+          "Iman is ready. On the kids' tablet, type e29b-41d4.",
+        ),
+      );
+    });
+
+    it('FHS-715: taking away a kid login does not say the kid is ready', async () => {
+      membersResponse = listWithKid({ callerRole: 'admin', kidHasPin: true });
+      renderAt('/t/e29b-41d4/members');
+      await expandKids();
+      await waitFor(() =>
+        expect(screen.getByTestId('members-kid-0-pin-toggle')).toBeInTheDocument(),
+      );
+      fireEvent.click(screen.getByTestId('members-kid-0-pin-toggle'));
+      fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ member: {} }) });
+      fetchMock.mockResolvedValueOnce(listWithKid({ callerRole: 'admin', kidHasPin: false }));
+      fireEvent.click(screen.getByTestId('members-kid-0-pin-remove'));
+
+      await waitFor(() =>
+        expect(screen.getByTestId('members-kid-0-pin-toggle').textContent).toContain('Set PIN'),
+      );
+      expect(screen.queryByTestId('members-kid-0-pin-ready')).toBeNull();
     });
 
     it('mismatched PIN + Confirm shows inline error and does NOT call the API', async () => {
