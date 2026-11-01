@@ -103,6 +103,24 @@ describe('<AuthCallbackPage />', () => {
     expect(screen.queryByTestId('link-expired-send')).not.toBeInTheDocument();
   });
 
+  it("FHS-714: Cancel on Google says Google sign-in didn't finish, not a broken email link", async () => {
+    renderAt('/auth/callback?error=access_denied&error_description=User+cancelled+the+request');
+    expect(await screen.findByTestId('link-expired-title')).toHaveTextContent(
+      "Google sign-in didn't finish",
+    );
+    expect(screen.getByTestId('link-expired-try-again')).toBeInTheDocument();
+    expect(screen.queryByTestId('link-expired-send')).not.toBeInTheDocument();
+  });
+
+  it('FHS-714: an expired email link still says so, not "Google"', async () => {
+    renderAt(
+      '/auth/callback#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired',
+    );
+    expect(await screen.findByTestId('link-expired-title')).toHaveTextContent(
+      'That link has expired',
+    );
+  });
+
   it('FHS-604: a fresh tab recalls the address from device memory', async () => {
     localStorage.setItem('fh.auth.email', 'sarah@khan.family');
     renderAt(

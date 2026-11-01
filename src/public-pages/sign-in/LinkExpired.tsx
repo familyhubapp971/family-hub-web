@@ -20,7 +20,7 @@ import { rememberAuthEmail, authCallbackUrl } from '../../app/lib/auth-email';
 // A genuinely slow sign-in is NOT this screen. That stays on LoadingScreen,
 // because it really is still waiting.
 
-export type LinkReason = 'expired' | 'used' | 'invalid' | 'timed-out';
+export type LinkReason = 'expired' | 'used' | 'invalid' | 'timed-out' | 'google-cancelled';
 
 const REASONS: Record<LinkReason, { emoji: string; title: string; line: string }> = {
   expired: {
@@ -45,12 +45,22 @@ const REASONS: Record<LinkReason, { emoji: string; title: string; line: string }
     title: 'That took too long',
     line: 'We stopped it to keep your account safe. Please try again.',
   },
+  // FHS-714: Cancel pressed on Google's page. Same words as the phone app.
+  'google-cancelled': {
+    emoji: '↩️',
+    title: "Google sign-in didn't finish",
+    line: 'Please try again.',
+  },
 };
+
+/** Reasons with no email link involved: the way forward is signing in again. */
+const SIGN_IN_AGAIN: LinkReason[] = ['timed-out', 'google-cancelled'];
 
 /** Picks the wording from whatever Supabase said, defaulting to expired. */
 export function reasonFromError(message: string | undefined): LinkReason {
   const m = (message ?? '').toLowerCase();
   if (/took too long/.test(m)) return 'timed-out';
+  if (/google sign-in didn't finish/.test(m)) return 'google-cancelled';
   if (/already been used|already used/.test(m)) return 'used';
   if (/invalid|malformed|bad_/.test(m)) return 'invalid';
   return 'expired';
@@ -135,7 +145,7 @@ export function LinkExpired({
               <p className="mt-3 font-body font-bold text-gray-600">{copy.line}</p>
             </div>
 
-            {reason === 'timed-out' ? (
+            {SIGN_IN_AGAIN.includes(reason) ? (
               <Button
                 type="button"
                 variant="primary"
@@ -243,7 +253,7 @@ export function LinkExpired({
               </>
             )}
 
-            {reason === 'timed-out' ? null : (
+            {SIGN_IN_AGAIN.includes(reason) ? null : (
               <p className="mt-2 text-center">
                 <Link
                   to="/login"

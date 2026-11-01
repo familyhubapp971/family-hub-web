@@ -29,6 +29,12 @@ function isGoogleTimeout(err: { code: string; description: string }): boolean {
   return err.code === 'bad_oauth_state' || /oauth state/i.test(err.description);
 }
 
+// FHS-714: pressing Cancel on Google's page comes back as access_denied with
+// no email-link code. That is not a broken email link either.
+function isGoogleCancel(err: { code: string; description: string }): boolean {
+  return err.code === 'access_denied' && !/otp|expired|link/i.test(err.description);
+}
+
 function isExpiredLink(err: { code: string; description: string }): boolean {
   return /expired/i.test(err.code) || /expired/i.test(err.description);
 }
@@ -72,9 +78,11 @@ export function AuthCallbackPage() {
           kind: 'error',
           message: isGoogleTimeout(authError)
             ? 'That took too long, so we stopped it to keep your account safe. Please try again.'
-            : isExpiredLink(authError)
-              ? 'Your sign-in link has expired. Request a new one to log in.'
-              : 'That sign-in link is invalid or has already been used. Request a new one.',
+            : isGoogleCancel(authError)
+              ? "Google sign-in didn't finish. Please try again."
+              : isExpiredLink(authError)
+                ? 'Your sign-in link has expired. Request a new one to log in.'
+                : 'That sign-in link is invalid or has already been used. Request a new one.',
         }
       : { kind: 'idle' },
   );
