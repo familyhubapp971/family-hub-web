@@ -17,23 +17,29 @@ vi.mock('../../../../../src/app/lib/auth-context', () => ({
   useAuth: () => ({ session: mockSession }),
 }));
 
+// FHS-717: the form reads a fresh sign-in pass when it sends. null means
+// none is stored, so the one from when the screen drew is used.
+let mockFreshSession: { access_token: string } | null = null;
 vi.mock('../../../../../src/app/lib/supabase', () => ({
-  supabase: { auth: { getSession: async () => ({ data: { session: null } }) } },
+  supabase: { auth: { getSession: async () => ({ data: { session: mockFreshSession } }) } },
 }));
 
 // FHS-717: shrinking a photo needs a real browser, so it is faked here. It has
 // its own tests in tests/unit/web/app/lib/shrink-photo.test.ts.
 const { shrinkMock } = vi.hoisted(() => ({ shrinkMock: vi.fn() }));
-vi.mock('../../../../../src/app/lib/shrink-photo', () => ({
+vi.mock('../../../../../src/app/lib/shrink-photo', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../../../src/app/lib/shrink-photo')>()),
   shrinkPhoto: (file: File) => shrinkMock(file),
 }));
 
+import { CannotOpenPhotoError, NotAPhotoError } from '../../../../../src/app/lib/shrink-photo';
 import { ScreenFeedback } from '../../../../../src/app/components/ScreenFeedback';
 
 const fetchMock = vi.fn();
 
 beforeEach(() => {
   mockSession = { access_token: 'parent.jwt.tok' };
+  mockFreshSession = null;
   mockLocation.pathname = '/t/test-family/dashboard';
   mockLocation.search = '?tab=meals';
   sessionStorage.clear();
@@ -285,12 +291,13 @@ describe('reporting an issue on this screen', () => {
     Object.assign(URL, { createObjectURL, revokeObjectURL });
     shrinkMock.mockReset();
     shrinkMock.mockImplementation(async (file: File) => {
-      if (!file.type.startsWith('image/')) throw new Error('not a photo');
+      if (!file.type.startsWith('image/')) throw new NotAPhotoError();
       return new Blob(['small'], { type: 'image/jpeg' });
     });
   });
 
-  const jpeg = (name = 'photo.jpg') => new File(['x'], name, { type: 'image/jpeg' });
+  const jpeg = (name = 'photo.jpg') =>
+    new File(['x'], name, { type: 'image/jpeg', lastModified: 1_700_000_000_000 });
 
   async function addPhotos(...files: File[]) {
     fireEvent.change(screen.getByTestId('screen-feedback-photo-input'), { target: { files } });
@@ -497,7 +504,7 @@ describe('reporting an issue on this screen', () => {
     await waitFor(() => expect(screen.getByTestId('screen-feedback-thanks')).toBeInTheDocument());
   });
 
-  it('only sends again the part that failed', async () => {
+  it('says the report was sent and locks it when only the answers failed', async () => {
     let answersFail = true;
     serverReplies({
       answers: () => Promise.resolve(new Response('{}', { status: answersFail ? 500 : 201 })),
@@ -505,16 +512,203 @@ describe('reporting an issue on this screen', () => {
     render(<ScreenFeedback role="admin" />);
     open();
     describeIssue('Wrong total');
+    await addPhotos(jpeg());
     fireEvent.click(screen.getByTestId('screen-feedback-solves-4'));
     send();
     await waitFor(() => expect(screen.getByTestId('screen-feedback-error')).toBeInTheDocument());
     expect(screen.queryByTestId('screen-feedback-thanks')).toBeNull();
+
+    // The report is shown, but can no longer be changed.
+    expect(screen.getByTestId('screen-feedback-issue-sent')).toHaveTextContent(
+      'Your report was sent.',
+    );
+    expect(screen.getByTestId('screen-feedback-issue-sent-text')).toHaveTextContent('Wrong total');
+    expect(screen.queryByLabelText('What went wrong?')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Remove photo 1' })).toBeNull();
+    expect(screen.queryByTestId('screen-feedback-add-photos')).toBeNull();
+    expect(screen.getAllByTestId('screen-feedback-photo')).toHaveLength(1);
 
     answersFail = false;
     send();
     await waitFor(() => expect(screen.getByTestId('screen-feedback-thanks')).toBeInTheDocument());
     expect(callsTo('/api/feedback/issues')).toHaveLength(1);
     expect(callsTo('/api/feedback')).toHaveLength(2);
+  });
+
+  it('sends only the report again when the answers went through but the report failed', async () => {
+    let reportFails = true;
+    serverReplies({
+      issues: () =>
+        Promise.resolve(
+          reportFails
+            ? new Response('{}', { status: 500 })
+            : new Response('{"id":"i1"}', { status: 201 }),
+        ),
+    });
+    render(<ScreenFeedback role="admin" />);
+    open();
+    describeIssue('Wrong total');
+    fireEvent.click(screen.getByTestId('screen-feedback-ease-3'));
+    send();
+    await waitFor(() =>
+      expect(screen.getByTestId('screen-feedback-error')).toHaveTextContent(
+        'We could not send your report.',
+      ),
+    );
+    expect(screen.queryByTestId('screen-feedback-issue-sent')).toBeNull();
+    expect(screen.getByLabelText('What went wrong?')).toHaveValue('Wrong total');
+
+    reportFails = false;
+    send();
+    await waitFor(() => expect(screen.getByTestId('screen-feedback-thanks')).toBeInTheDocument());
+    expect(callsTo('/api/feedback/issues')).toHaveLength(2);
+    expect(callsTo('/api/feedback')).toHaveLength(1);
+  });
+
+  // Review finding: closing the form mid-send used to leave Send dead after
+  // reopening, and the old send then said "Thank you!" on the new form.
+  it('ignores a send that finishes after the form was closed, and the new form still sends', async () => {
+    const pending: Array<(r: Response) => void> = [];
+    serverReplies({ issues: () => new Promise<Response>((r) => pending.push(r)) });
+    render(<ScreenFeedback role="admin" />);
+    open();
+    describeIssue('First go');
+    send();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole('button', { name: 'Close feedback dialog' }));
+    open();
+    describeIssue('Second go');
+
+    await act(async () => pending[0]!(new Response('{"id":"i1"}', { status: 201 })));
+    expect(screen.queryByTestId('screen-feedback-thanks')).toBeNull();
+    expect(screen.queryByTestId('screen-feedback-issue-sent')).toBeNull();
+    expect(screen.getByLabelText('What went wrong?')).toHaveValue('Second go');
+    expect(screen.getByTestId('screen-feedback-submit')).not.toBeDisabled();
+
+    send();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect((fetchMock.mock.calls[1]![1].body as FormData).get('description')).toBe('Second go');
+    await act(async () => pending[1]!(new Response('{"id":"i2"}', { status: 201 })));
+    expect(screen.getByTestId('screen-feedback-thanks')).toBeInTheDocument();
+  });
+
+  it('sends with a fresh sign-in pass, not the one from when the screen opened', async () => {
+    mockFreshSession = { access_token: 'renewed.jwt.tok' };
+    serverReplies({});
+    render(<ScreenFeedback role="admin" />);
+    open();
+    describeIssue('Pass check');
+    send();
+    await waitFor(() => expect(screen.getByTestId('screen-feedback-thanks')).toBeInTheDocument());
+    expect(fetchMock.mock.calls[0]![1].headers['Authorization']).toBe('Bearer renewed.jwt.tok');
+  });
+
+  it.each([
+    [401, 'Please sign in again, then send your report.'],
+    [403, 'Only grown-ups can send reports.'],
+    [429, "You've sent a lot of reports this hour. Please try again later."],
+  ])('explains a %i from the server in plain words', async (status, words) => {
+    serverReplies({ issues: () => Promise.resolve(new Response('{}', { status })) });
+    render(<ScreenFeedback role="admin" />);
+    open();
+    describeIssue('Status check');
+    send();
+    await waitFor(() =>
+      expect(screen.getByTestId('screen-feedback-error')).toHaveTextContent(words),
+    );
+  });
+
+  it('does not tell the parent to keep trying when they have sent too many reports', async () => {
+    serverReplies({ issues: () => Promise.resolve(new Response('{}', { status: 429 })) });
+    render(<ScreenFeedback role="admin" />);
+    open();
+    describeIssue('Too many');
+    send();
+    await waitFor(() => expect(screen.getByTestId('screen-feedback-error')).toBeInTheDocument());
+    expect(screen.getByTestId('screen-feedback-error')).not.toHaveTextContent(
+      'tap Send feedback to try again',
+    );
+  });
+
+  it('stops waiting after 60 seconds and says sending is taking too long', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      fetchMock.mockImplementation(
+        (_url: string, init: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            init.signal?.addEventListener('abort', () =>
+              reject(new DOMException('aborted', 'AbortError')),
+            );
+          }),
+      );
+      render(<ScreenFeedback role="admin" />);
+      open();
+      describeIssue('Slow network');
+      send();
+      await act(async () => {});
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      await act(async () => vi.advanceTimersByTime(59_000));
+      expect(screen.queryByTestId('screen-feedback-error')).toBeNull();
+      await act(async () => vi.advanceTimersByTime(1_000));
+      expect(screen.getByTestId('screen-feedback-error')).toHaveTextContent(
+        'Sending is taking too long. Check your connection, then tap Send feedback to try again.',
+      );
+      expect(screen.getByTestId('screen-feedback-submit')).not.toBeDisabled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('says it could not open a photo the browser cannot read, such as an iPhone HEIC', async () => {
+    shrinkMock.mockRejectedValue(new CannotOpenPhotoError());
+    render(<ScreenFeedback role="admin" />);
+    open();
+    await addPhotos(new File(['x'], 'IMG_0001.HEIC', { type: 'image/heic' }));
+    expect(screen.getByTestId('screen-feedback-photo-error')).toHaveTextContent(
+      "We couldn't open that photo. Try a screenshot or a JPEG photo.",
+    );
+    expect(screen.queryAllByTestId('screen-feedback-photo')).toHaveLength(0);
+  });
+
+  it('skips a photo that was already added', async () => {
+    render(<ScreenFeedback role="admin" />);
+    open();
+    await addPhotos(jpeg('same.jpg'));
+    await addPhotos(jpeg('same.jpg'));
+    expect(screen.getAllByTestId('screen-feedback-photo')).toHaveLength(1);
+    expect(screen.getByTestId('screen-feedback-photo-error')).toHaveTextContent(
+      'You already added that photo.',
+    );
+    expect(shrinkMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('moves the keyboard to the next Remove button after removing a photo', async () => {
+    render(<ScreenFeedback role="admin" />);
+    open();
+    await addPhotos(jpeg('a.jpg'), jpeg('b.jpg'));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove photo 1' }));
+    expect(screen.getByRole('button', { name: 'Remove photo 1' })).toHaveFocus();
+  });
+
+  it('moves the keyboard to Add photos after removing the last photo', async () => {
+    render(<ScreenFeedback role="admin" />);
+    open();
+    await addPhotos(jpeg('a.jpg'));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove photo 1' }));
+    expect(screen.getByTestId('screen-feedback-add-photos')).toHaveFocus();
+  });
+
+  it('drops a photo still getting ready when the screen goes away', async () => {
+    let finish!: (b: Blob) => void;
+    shrinkMock.mockReturnValue(new Promise<Blob>((r) => (finish = r)));
+    const { unmount } = render(<ScreenFeedback role="admin" />);
+    open();
+    fireEvent.change(screen.getByTestId('screen-feedback-photo-input'), {
+      target: { files: [jpeg()] },
+    });
+    unmount();
+    await act(async () => finish(new Blob(['small'], { type: 'image/jpeg' })));
+    expect(createObjectURL).not.toHaveBeenCalled();
   });
 
   it('explains when the photos are too big to send', async () => {
@@ -552,6 +746,7 @@ describe('reporting an issue on this screen', () => {
     send();
     send();
     expect(screen.getByTestId('screen-feedback-submit')).toBeDisabled();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     resolve(new Response('{"id":"i1"}', { status: 201 }));
     await waitFor(() => expect(screen.getByTestId('screen-feedback-thanks')).toBeInTheDocument());
     expect(fetchMock).toHaveBeenCalledTimes(1);

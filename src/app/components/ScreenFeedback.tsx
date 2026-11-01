@@ -26,25 +26,60 @@ import { Button, Dialog, Spinner } from '@familyhub/ui';
 import { isGrownUpRole } from '@familyhub/shared';
 import { useAuth } from '../lib/auth-context';
 import { API_BASE } from '../lib/api';
+import { supabase } from '../lib/supabase';
 import {
   getVisitId,
   screenFeedbackByKey,
   screenFeedbackFor,
   type ScreenFeedbackConfig,
 } from '../lib/screen-feedback';
-import { shrinkPhoto } from '../lib/shrink-photo';
+import { NotAPhotoError, shrinkPhoto } from '../lib/shrink-photo';
 import { CountedTextarea, RatingRow } from './BetaFeedbackWidget';
 
 const HINT_MS = 5000;
 const MAX_PHOTOS = 3;
 const NOT_A_PHOTO = "That file isn't a photo we can use.";
+const CANNOT_OPEN = "We couldn't open that photo. Try a screenshot or a JPEG photo.";
+const ALREADY_ADDED = 'You already added that photo.';
 const OFFLINE = 'Could not reach the server. Check your connection and try again.';
+const TOO_SLOW =
+  'Sending is taking too long. Check your connection, then tap Send feedback to try again.';
+const SEND_TIMEOUT_MS = 60_000;
+
+const ISSUE_ERRORS: Record<number, string> = {
+  401: 'Please sign in again, then send your report.',
+  403: 'Only grown-ups can send reports.',
+  413: 'Those photos are too big to send. Remove one, then tap Send feedback to try again.',
+  429: "You've sent a lot of reports this hour. Please try again later.",
+};
+const ISSUE_FAILED =
+  'We could not send your report. Your words and photos are still here, so tap Send feedback to try again.';
 
 interface ChosenPhoto {
   id: number;
   blob: Blob;
   /** A short-lived browser address for the thumbnail; let go of when removed. */
   url: string;
+  /** Name, size and date of the original file, to spot the same photo picked twice. */
+  source: string;
+}
+
+const sourceOf = (f: File) => `${f.name}|${f.size}|${f.lastModified}`;
+
+class SendTimeout extends Error {}
+
+/** A send that has not finished after 60 seconds is stopped, so the form never hangs. */
+async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), SEND_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (err) {
+    if (controller.signal.aborted) throw new SendTimeout();
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 interface ScreenFeedbackProps {
@@ -83,14 +118,18 @@ export function ScreenFeedback({ role, screenKey }: ScreenFeedbackProps) {
   // Goes up each time the form opens or closes, so a photo still being shrunk
   // from an earlier go is thrown away rather than turning up later.
   const round = useRef(0);
-  // What has already reached the server. After a half failure, trying again
-  // sends only the part that failed, so nothing arrives twice.
-  const sent = useRef<{ issue: string | null; answers: string | null }>({
-    issue: null,
-    answers: null,
-  });
-  // Blocks a second tap on Send that lands before the button greys out.
-  const busy = useRef(false);
+  // Once the report has reached the server it is never sent again, even if
+  // the answers beside it failed and the parent taps Send once more.
+  const [issueSent, setIssueSent] = useState(false);
+  const issueSentRef = useRef(false);
+  // The answers that already reached the server, so a retry skips them.
+  const answersSent = useRef<string | null>(null);
+  // Which go of the form is sending, if any. Blocks a second tap on Send that
+  // lands before the button greys out.
+  const sending = useRef<number | null>(null);
+  const removeButtons = useRef(new Map<number, HTMLButtonElement>());
+  const addPhotosButton = useRef<HTMLButtonElement>(null);
+  const focusAfterRemove = useRef<number | null>(null);
 
   const visible = Boolean(session && slug && isGrownUpRole(role));
   const current = screenKey
@@ -126,8 +165,25 @@ export function ScreenFeedback({ role, screenKey }: ScreenFeedbackProps) {
     setPhotos([]);
   }, []);
 
-  // Let go of the thumbnails if the screen goes away with the form open.
-  useEffect(() => () => photosRef.current.forEach((p) => URL.revokeObjectURL(p.url)), []);
+  // If the screen goes away with the form open: let go of the thumbnails, and
+  // drop any photo still being shrunk or any send still on its way.
+  useEffect(
+    () => () => {
+      round.current += 1;
+      photosRef.current.forEach((p) => URL.revokeObjectURL(p.url));
+    },
+    [],
+  );
+
+  // After Remove, keep the keyboard in the same place: the next photo's
+  // Remove button, or Add photos when there is no next photo.
+  useEffect(() => {
+    const index = focusAfterRemove.current;
+    if (index === null) return;
+    focusAfterRemove.current = null;
+    const next = photos[index];
+    (next ? removeButtons.current.get(next.id) : addPhotosButton.current)?.focus();
+  }, [photos]);
 
   const handleOpen = useCallback(() => {
     round.current += 1;
@@ -143,7 +199,10 @@ export function ScreenFeedback({ role, screenKey }: ScreenFeedbackProps) {
     setIssue('');
     setPreparing(0);
     setPhotoError('');
-    sent.current = { issue: null, answers: null };
+    setIssueSent(false);
+    issueSentRef.current = false;
+    answersSent.current = null;
+    sending.current = null;
     setState('idle');
     setErrorMsg('');
     setOpen(true);
@@ -161,8 +220,10 @@ export function ScreenFeedback({ role, screenKey }: ScreenFeedbackProps) {
   }, []);
 
   const removePhoto = useCallback((id: number) => {
-    const gone = photosRef.current.find((p) => p.id === id);
+    const index = photosRef.current.findIndex((p) => p.id === id);
+    const gone = photosRef.current[index];
     if (gone) URL.revokeObjectURL(gone.url);
+    focusAfterRemove.current = index;
     photosRef.current = photosRef.current.filter((p) => p.id !== id);
     setPhotos(photosRef.current);
     setPhotoError('');
@@ -175,11 +236,20 @@ export function ScreenFeedback({ role, screenKey }: ScreenFeedbackProps) {
     const room = MAX_PHOTOS - photosRef.current.length;
     if (files.length === 0 || room <= 0) return;
 
-    const chosen = files.slice(0, room);
+    const seen = new Set(photosRef.current.map((p) => p.source));
+    const fresh = files.filter((f) => {
+      const key = sourceOf(f);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    let message = fresh.length < files.length ? ALREADY_ADDED : '';
+    if (fresh.length > room) message = `Up to ${MAX_PHOTOS} photos, so we added the first ${room}.`;
+    const chosen = fresh.slice(0, room);
+    setPhotoError(message);
+    if (chosen.length === 0) return;
+
     const myRound = round.current;
-    let message =
-      files.length > room ? `Up to ${MAX_PHOTOS} photos, so we added the first ${room}.` : '';
-    setPhotoError('');
     setPreparing(chosen.length);
 
     // One at a time: a phone photo takes a lot of memory while it is resized.
@@ -187,12 +257,17 @@ export function ScreenFeedback({ role, screenKey }: ScreenFeedbackProps) {
       let blob: Blob | null = null;
       try {
         blob = await shrinkPhoto(file);
-      } catch {
-        message = NOT_A_PHOTO;
+      } catch (err) {
+        message = err instanceof NotAPhotoError ? NOT_A_PHOTO : CANNOT_OPEN;
       }
       if (round.current !== myRound) return;
       if (blob) {
-        const photo = { id: nextPhotoId.current++, blob, url: URL.createObjectURL(blob) };
+        const photo = {
+          id: nextPhotoId.current++,
+          blob,
+          url: URL.createObjectURL(blob),
+          source: sourceOf(file),
+        };
         photosRef.current = [...photosRef.current, photo];
         setPhotos(photosRef.current);
       }
@@ -202,17 +277,26 @@ export function ScreenFeedback({ role, screenKey }: ScreenFeedbackProps) {
   }, []);
 
   const handleSubmit = useCallback(async () => {
-    if (!screen || (!hasAnswer && !hasIssue) || preparing > 0 || busy.current) return;
-    busy.current = true;
+    if (!screen || (!hasAnswer && !hasIssue) || preparing > 0 || sending.current !== null) return;
+    const myRound = round.current;
+    sending.current = myRound;
     setState('submitting');
     setErrorMsg('');
 
+    // Read the sign-in pass now, not when the screen drew: it may have been
+    // renewed while the parent was typing.
+    let token = session?.access_token;
+    try {
+      const { data } = await supabase.auth.getSession();
+      token = data.session?.access_token ?? token;
+    } catch {
+      // keep the pass from when the screen drew
+    }
     const auth: Record<string, string> = { Accept: 'application/json' };
-    if (session?.access_token) auth['Authorization'] = `Bearer ${session.access_token}`;
+    if (token) auth['Authorization'] = `Bearer ${token}`;
     if (slug) auth['x-tenant-slug'] = slug;
 
-    const issueKey = hasIssue ? `${issue.trim()}|${photos.map((p) => p.id).join(',')}` : null;
-    const sendIssue = issueKey !== null && sent.current.issue !== issueKey;
+    const sendIssue = hasIssue && !issueSentRef.current;
 
     let answersJson: string | null = null;
     if (hasAnswer) {
@@ -228,7 +312,7 @@ export function ScreenFeedback({ role, screenKey }: ScreenFeedbackProps) {
       if (other.trim()) body.otherFeedback = other.trim();
       answersJson = JSON.stringify(body);
     }
-    const sendAnswers = answersJson !== null && sent.current.answers !== answersJson;
+    const sendAnswers = answersJson !== null && answersSent.current !== answersJson;
 
     // Each returns null when it worked, or the sentence to show when it did not.
     const postIssue = async (): Promise<string | null> => {
@@ -240,24 +324,21 @@ export function ScreenFeedback({ role, screenKey }: ScreenFeedbackProps) {
       try {
         // No Content-Type here: the browser adds it, with the boundary the
         // server needs to split the photos apart.
-        const res = await fetch(`${API_BASE}/api/feedback/issues`, {
+        const res = await fetchWithTimeout(`${API_BASE}/api/feedback/issues`, {
           method: 'POST',
           headers: auth,
           body: form,
         });
         if (res.ok) return null;
-        if (res.status === 413) {
-          return 'Those photos are too big to send. Remove one, then tap Send feedback to try again.';
-        }
-        return 'We could not send your report. Your words and photos are still here, so tap Send feedback to try again.';
-      } catch {
-        return OFFLINE;
+        return ISSUE_ERRORS[res.status] ?? ISSUE_FAILED;
+      } catch (err) {
+        return err instanceof SendTimeout ? TOO_SLOW : OFFLINE;
       }
     };
 
     const postAnswers = async (json: string): Promise<string | null> => {
       try {
-        const res = await fetch(`${API_BASE}/api/feedback`, {
+        const res = await fetchWithTimeout(`${API_BASE}/api/feedback`, {
           method: 'POST',
           headers: { ...auth, 'Content-Type': 'application/json' },
           body: json,
@@ -271,8 +352,8 @@ export function ScreenFeedback({ role, screenKey }: ScreenFeedbackProps) {
           // keep the default message
         }
         return msg;
-      } catch {
-        return OFFLINE;
+      } catch (err) {
+        return err instanceof SendTimeout ? TOO_SLOW : OFFLINE;
       }
     };
 
@@ -280,9 +361,19 @@ export function ScreenFeedback({ role, screenKey }: ScreenFeedbackProps) {
       sendIssue ? postIssue() : Promise.resolve(null),
       sendAnswers && answersJson ? postAnswers(answersJson) : Promise.resolve(null),
     ]);
-    busy.current = false;
-    if (sendIssue && issueError === null) sent.current.issue = issueKey;
-    if (sendAnswers && answersError === null) sent.current.answers = answersJson;
+
+    // The form was closed (and maybe opened again) while this was on its
+    // way. It belonged to a form that is gone, so it changes nothing here.
+    if (round.current !== myRound) {
+      if (sending.current === myRound) sending.current = null;
+      return;
+    }
+    sending.current = null;
+    if (sendIssue && issueError === null) {
+      issueSentRef.current = true;
+      setIssueSent(true);
+    }
+    if (sendAnswers && answersError === null) answersSent.current = answersJson;
 
     const problem = issueError ?? answersError;
     if (problem === null) {
@@ -435,22 +526,44 @@ export function ScreenFeedback({ role, screenKey }: ScreenFeedbackProps) {
                   <h3 id={issueTitleId} className="font-display text-lg font-black text-black">
                     Found an issue on this screen? Report it.
                   </h3>
-                  <div>
-                    <label
-                      htmlFor="screen-feedback-issue-text"
-                      className="mb-1 block font-black text-sm text-black"
-                    >
-                      What went wrong?
-                    </label>
-                    <CountedTextarea
-                      id="screen-feedback-issue-text"
-                      testId="screen-feedback-issue-text"
-                      rows={3}
-                      value={issue}
-                      onChange={setIssue}
-                      placeholder="What you tapped, and what happened"
-                    />
-                  </div>
+                  {issueSent ? (
+                    // The report is in. It stays on show but can no longer be
+                    // changed, because it will not be sent again.
+                    <>
+                      <p
+                        role="status"
+                        data-testid="screen-feedback-issue-sent"
+                        className="rounded-xl border-2 border-black bg-lime-100 px-3 py-2 text-sm font-black text-black"
+                      >
+                        Your report was sent.
+                      </p>
+                      {issue.trim() && (
+                        <p
+                          className="whitespace-pre-wrap break-words rounded-xl border-2 border-black bg-white p-3 text-sm font-medium text-gray-900"
+                          data-testid="screen-feedback-issue-sent-text"
+                        >
+                          {issue}
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <div>
+                      <label
+                        htmlFor="screen-feedback-issue-text"
+                        className="mb-1 block font-black text-sm text-black"
+                      >
+                        What went wrong?
+                      </label>
+                      <CountedTextarea
+                        id="screen-feedback-issue-text"
+                        testId="screen-feedback-issue-text"
+                        rows={3}
+                        value={issue}
+                        onChange={setIssue}
+                        placeholder="What you tapped, and what happened"
+                      />
+                    </div>
+                  )}
 
                   {(photos.length > 0 || preparing > 0) && (
                     <ul
@@ -466,14 +579,20 @@ export function ScreenFeedback({ role, screenKey }: ScreenFeedbackProps) {
                             className="aspect-square w-full rounded-xl border-2 border-black bg-white object-cover"
                             data-testid="screen-feedback-photo"
                           />
-                          <button
-                            type="button"
-                            aria-label={`Remove photo ${i + 1}`}
-                            onClick={() => removePhoto(p.id)}
-                            className="min-h-[44px] w-full rounded-xl border-2 border-black bg-white px-2 text-xs font-black text-black hover:bg-yellow-100 focus:outline-none focus-visible:ring-4 focus-visible:ring-pink-600"
-                          >
-                            Remove
-                          </button>
+                          {!issueSent && (
+                            <button
+                              type="button"
+                              ref={(el) => {
+                                if (el) removeButtons.current.set(p.id, el);
+                                else removeButtons.current.delete(p.id);
+                              }}
+                              aria-label={`Remove photo ${i + 1}`}
+                              onClick={() => removePhoto(p.id)}
+                              className="min-h-[44px] w-full rounded-xl border-2 border-black bg-white px-2 text-xs font-black text-black hover:bg-yellow-100 focus:outline-none focus-visible:ring-4 focus-visible:ring-pink-600"
+                            >
+                              Remove
+                            </button>
+                          )}
                         </li>
                       ))}
                       {Array.from({ length: preparing }, (_, i) => (
@@ -488,35 +607,38 @@ export function ScreenFeedback({ role, screenKey }: ScreenFeedbackProps) {
                     </ul>
                   )}
 
-                  <div className="flex flex-wrap items-center gap-3">
-                    <Button
-                      variant="secondary"
-                      onClick={() => fileInput.current?.click()}
-                      disabled={photos.length + preparing >= MAX_PHOTOS || preparing > 0}
-                      aria-describedby={photoHintId}
-                      testId="screen-feedback-add-photos"
-                      className="min-h-[44px] gap-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <ImagePlus className="h-4 w-4 shrink-0" aria-hidden="true" />
-                      Add photos
-                    </Button>
-                    <p id={photoHintId} className="text-xs font-bold text-gray-600">
-                      Up to {MAX_PHOTOS} photos
-                    </p>
-                    <input
-                      ref={fileInput}
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      hidden
-                      tabIndex={-1}
-                      aria-label="Choose photos"
-                      onChange={handleFiles}
-                      data-testid="screen-feedback-photo-input"
-                    />
-                  </div>
+                  {!issueSent && (
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Button
+                        ref={addPhotosButton}
+                        variant="secondary"
+                        onClick={() => fileInput.current?.click()}
+                        disabled={photos.length + preparing >= MAX_PHOTOS || preparing > 0}
+                        aria-describedby={photoHintId}
+                        testId="screen-feedback-add-photos"
+                        className="min-h-[44px] gap-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <ImagePlus className="h-4 w-4 shrink-0" aria-hidden="true" />
+                        Add photos
+                      </Button>
+                      <p id={photoHintId} className="text-xs font-bold text-gray-600">
+                        Up to {MAX_PHOTOS} photos
+                      </p>
+                      <input
+                        ref={fileInput}
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        hidden
+                        tabIndex={-1}
+                        aria-label="Choose photos"
+                        onChange={handleFiles}
+                        data-testid="screen-feedback-photo-input"
+                      />
+                    </div>
+                  )}
 
-                  {photoError && (
+                  {photoError && !issueSent && (
                     <p
                       role="alert"
                       data-testid="screen-feedback-photo-error"

@@ -15,11 +15,23 @@ const QUALITY_STEP = 0.1;
 const SIZE_STEP = 0.75;
 const MAX_TRIES = 12;
 
-/** The file could not be opened as a picture (a PDF, a broken file, an unknown format). */
+/** The file is not a picture at all, such as a PDF. */
 export class NotAPhotoError extends Error {
   constructor() {
     super('not a photo');
     this.name = 'NotAPhotoError';
+  }
+}
+
+/**
+ * The file says it is a picture, but this browser cannot open it. Chrome on a
+ * computer cannot open an iPhone's HEIC photos, for example; a broken file
+ * lands here too.
+ */
+export class CannotOpenPhotoError extends Error {
+  constructor() {
+    super('cannot open photo');
+    this.name = 'CannotOpenPhotoError';
   }
 }
 
@@ -35,12 +47,12 @@ function loadImage(file: Blob): Promise<LoadedImage> {
     const img = new Image();
     img.onload = () => {
       URL.revokeObjectURL(url);
-      if (!img.naturalWidth || !img.naturalHeight) reject(new NotAPhotoError());
+      if (!img.naturalWidth || !img.naturalHeight) reject(new CannotOpenPhotoError());
       else resolve({ source: img, width: img.naturalWidth, height: img.naturalHeight });
     };
     img.onerror = () => {
       URL.revokeObjectURL(url);
-      reject(new NotAPhotoError());
+      reject(new CannotOpenPhotoError());
     };
     img.src = url;
   });
@@ -49,7 +61,7 @@ function loadImage(file: Blob): Promise<LoadedImage> {
 function canvasToJpeg(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob(
-      (blob) => (blob ? resolve(blob) : reject(new NotAPhotoError())),
+      (blob) => (blob ? resolve(blob) : reject(new CannotOpenPhotoError())),
       'image/jpeg',
       quality,
     );
@@ -59,7 +71,8 @@ function canvasToJpeg(canvas: HTMLCanvasElement, quality: number): Promise<Blob>
 /**
  * Returns a JPEG of the photo, no longer than 1600px on its longest side and
  * under 1,000,000 bytes. Lowers the quality first, then the size, until it fits.
- * Throws NotAPhotoError when the file cannot be read as a picture.
+ * Throws NotAPhotoError for a file that is not a picture, and
+ * CannotOpenPhotoError for a picture this browser cannot open.
  */
 export async function shrinkPhoto(file: Blob): Promise<Blob> {
   if (file.type && !file.type.startsWith('image/')) throw new NotAPhotoError();
@@ -67,7 +80,7 @@ export async function shrinkPhoto(file: Blob): Promise<Blob> {
 
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
-  if (!ctx) throw new NotAPhotoError();
+  if (!ctx) throw new CannotOpenPhotoError();
 
   let scale = Math.min(1, MAX_PHOTO_SIDE / Math.max(image.width, image.height));
   let quality = START_QUALITY;
@@ -90,5 +103,5 @@ export async function shrinkPhoto(file: Blob): Promise<Blob> {
       scale *= SIZE_STEP;
     }
   }
-  throw new NotAPhotoError();
+  throw new CannotOpenPhotoError();
 }

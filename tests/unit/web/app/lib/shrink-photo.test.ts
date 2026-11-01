@@ -3,6 +3,7 @@
 // photo's size, and decides how many bytes each saved JPEG comes out at.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
+  CannotOpenPhotoError,
   MAX_PHOTO_BYTES,
   NotAPhotoError,
   shrinkPhoto,
@@ -127,7 +128,7 @@ describe('shrinkPhoto', () => {
 
   it('refuses a picture the browser cannot open, and tidies up after itself', async () => {
     photoOpens = false;
-    await expect(shrinkPhoto(photo('image/heic'))).rejects.toBeInstanceOf(NotAPhotoError);
+    await expect(shrinkPhoto(photo('image/heic'))).rejects.toBeInstanceOf(CannotOpenPhotoError);
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:photo');
   });
 
