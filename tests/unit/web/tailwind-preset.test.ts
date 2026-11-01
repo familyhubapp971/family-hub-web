@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 // Relative import to bypass Vitest's package-exports resolution which doesn't
 // pick up the `./tailwind.preset.js` exports map cleanly. The config file is
 // plain ESM JS and the test only inspects its shape.
-import preset from '../../../packages/ui/tailwind.preset.js';
+import preset from '../../../design-system/tailwind.preset.js';
 
 // Sanity tests for the design-system preset. These fail loudly if the
 // canonical brand purple, the heading-font alias, or the kingdom scale

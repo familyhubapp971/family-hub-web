@@ -5,15 +5,13 @@ the running infrastructure, env-var matrix, deploy flow, and known
 constraints. Update whenever topology changes (add a service, rotate a
 secret format, change a branch tracking rule, upgrade plan).
 
-> **Status as of 2026-04-30:** Sprint 0 bootstrap **complete on
-> staging**. Trial plan ($5 / 28-day cap). Both `api` and `frontend`
-> deploy cleanly from the `staging` branch; the W1 vertical slice
-> (Supabase login → JWT-protected `/api/me` → frontend greeting) is
-> live and verified, see
-> [W1 vertical slice: staging verification](#w1-vertical-slice-staging-verification-fhs-198).
-> Production environment exists but is intentionally unconfigured
-> pending Hobby-plan upgrade, see
-> [FHS-202](https://qualicion2.atlassian.net/browse/FHS-202).
+> **Status as of 2026-10-31:** the live setup is now **production**
+> and builds from `main`. Real users are on it. A new **staging** setup
+> builds from the `staging` branch. The code is split across two repos:
+> the server in `family-hub-api`, the web site in `family-hub-web`
+> (this repo, renamed from `family-hub-app`). See
+> [Production switch](#production-switch-2026-10-31). Sections below this
+> point describe the earlier staging setup and are partly out of date.
 
 ## Project
 
@@ -31,10 +29,10 @@ for variable names).
 
 ## Environments
 
-| Name         | ID                                     | Purpose                                 | Branch           |
-| ------------ | -------------------------------------- | --------------------------------------- | ---------------- |
-| `staging`    | `3fb76a04-e926-4bdf-ae03-659966366dfb` | Pre-prod, all bootstrap work lands here | `staging`        |
-| `production` | `4d84223a-86d3-49ef-a66c-acefe2100158` | GA target: currently unconfigured       | `main` (planned) |
+| Name         | ID                                     | Purpose                                                   | Branch    |
+| ------------ | -------------------------------------- | --------------------------------------------------------- | --------- |
+| `production` | `3fb76a04-e926-4bdf-ae03-659966366dfb` | Live site with real users                                 | `main`    |
+| `staging`    | `8b1d3dab-dc01-49ea-906e-726c8a12f4f2` | Pre-release checks, own sign-in (GoTrue) since 2026-10-31 | `staging` |
 
 The branching strategy is documented in
 [ADR 0006](../decisions/0006-branching-strategy.md): merges land on
@@ -76,8 +74,8 @@ flowchart TB
 | Service    | ID                                     | Source                           | Image                |
 | ---------- | -------------------------------------- | -------------------------------- | -------------------- |
 | `postgres` | `e2a7c43f-46db-44e8-bc06-a934fe290699` | n/a                              | `postgres:16-alpine` |
-| `api`      | `7a93c040-1220-4afb-a564-f4cf98901948` | `familyhubapp971/family-hub-app` | n/a                  |
-| `frontend` | `f3048c9c-195b-4141-8cca-daf0f213d6a9` | `familyhubapp971/family-hub-app` | n/a                  |
+| `api`      | `7a93c040-1220-4afb-a564-f4cf98901948` | `familyhubapp971/family-hub-api` | n/a                  |
+| `frontend` | `f3048c9c-195b-4141-8cca-daf0f213d6a9` | `familyhubapp971/family-hub-web` | n/a                  |
 
 ### Postgres
 
@@ -107,14 +105,14 @@ Hono server (Node 20+, ESM). pnpm workspace, depends on
 `@familyhub/shared` via `workspace:*`. Build/start config lives at the
 service-instance level so per-env overrides are possible later.
 
-The build step bundles via [`apps/api/build.mjs`](../../apps/api/build.mjs)
-(esbuild) into a single `apps/api/dist/index.js` so workspace cross-
+The build step bundles via [`family-hub-api/build.mjs`](https://github.com/familyhubapp971/family-hub-api/blob/staging/build.mjs)
+(esbuild) into a single `family-hub-api/dist/index.js` so workspace cross-
 imports resolve at runtime without exporting unnecessary `dist/` from
-`packages/shared`. See [FHS-201](https://qualicion2.atlassian.net/browse/FHS-201).
+`shared-rules` (family-hub-api). See [FHS-201](https://qualicion2.atlassian.net/browse/FHS-201).
 
 ### frontend
 
-Vite SPA. Built into `apps/web/dist/` and served via `vite preview`
+Vite SPA. Built into `dist/` and served via `vite preview`
 bound to `$PORT`. Public domain
 **[`frontend-staging-409d.up.railway.app`](https://frontend-staging-409d.up.railway.app)**
 (domain ID `098cbd7e-9a09-40d2-9004-c37bf6a62518`, target port `8080`).
@@ -132,18 +130,18 @@ switch to a static-file server (Caddy/nginx) or Railway Edge.
 | `postgres` | n/a (image)                                                                         | n/a (image entrypoint)                                                       |
 
 `rootDirectory` is left at the default (`/`: repo root) on every
-instance because rootDirectory: `apps/api`/`apps/web` would break
+instance because a sub-folder rootDirectory would break
 pnpm workspace resolution (Railway can't see the workspace packages).
 
 Healthcheck: api uses `/health`
-([`apps/api/src/routes/health.ts`](../../apps/api/src/routes/health.ts)).
+([`family-hub-api/src/areas/health/health.ts`](https://github.com/familyhubapp971/family-hub-api/blob/staging/src/areas/health/health.ts)).
 Frontend has no healthcheck, Railway falls back to TCP-level checks.
 
 ### Schema migration on api start
 
 The api `start` script runs `drizzle-kit push --force` _before_
 booting the server. Every deploy reconciles the live Postgres schema
-against `apps/api/src/db/schema.ts` automatically, no separate
+against `family-hub-api/src/database/schema.ts` automatically, no separate
 "apply migrations" step, no opportunity for code-vs-database drift to
 ship.
 
@@ -187,7 +185,7 @@ Trade-offs we accepted:
 | `NODE_ENV`                  | MCP                              | `production` (the api config schema only accepts `development`/`test`/`production`; staging is treated as production-like for strictness)                                                                  |
 | `LOG_LEVEL`                 | MCP                              | `info`                                                                                                                                                                                                     |
 | `DATABASE_URL`              | MCP (Railway-resolved at deploy) | `postgresql://${{postgres.POSTGRES_USER}}:${{postgres.POSTGRES_PASSWORD}}@${{postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/${{postgres.POSTGRES_DB}}` (see [cross-service references](#cross-service-references)) |
-| `PORT`                      | Railway-injected                 | (assigned by Railway, read by [`apps/api/src/config.ts`](../../apps/api/src/config.ts))                                                                                                                    |
+| `PORT`                      | Railway-injected                 | (assigned by Railway, read by [`family-hub-api/src/config.ts`](https://github.com/familyhubapp971/family-hub-api/blob/staging/src/config.ts))                                                              |
 | `SUPABASE_URL`              | MCP (FHS-189)                    | `https://maolytpqazmykjzdybtj.supabase.co` (staging Supabase project per [ADR 0008](../decisions/0008-supabase-environments.md))                                                                           |
 | `SUPABASE_ANON_KEY`         | MCP (FHS-189)                    | legacy HS256 anon JWT: client-safe role, used for the public-API client                                                                                                                                    |
 | `SUPABASE_SERVICE_ROLE_KEY` | MCP (FHS-189)                    | legacy HS256 admin JWT: server-side only, bypasses RLS; **never** mirror onto the frontend service                                                                                                         |
@@ -196,18 +194,20 @@ Trade-offs we accepted:
 | `FOUNDER_PASSCODE`          | Railway API (FHS-672)            | 6 to 12 digits for the founder's `/admin` feedback page; unset switches the page off. Never in the repo.                                                                                                   |
 | `FOUNDER_TOKEN_SECRET`      | Railway dashboard (FHS-672)      | 48+ random characters (`openssl rand -base64 48`) that sign the `/admin` pass. Without it the page stays off on deployed servers.                                                                          |
 
-JWT verification is via Supabase's JWKS endpoint at
-`$SUPABASE_URL/auth/v1/.well-known/jwks.json` (ES256), not a shared HMAC
-secret, `SUPABASE_JWT_SECRET` is therefore not used. See FHS-191 for the
-JWKS-cached middleware that lands once auth wiring begins.
+Sign-in passes are checked against public keys (ES256), never a shared
+secret. Where the keys come from: `AUTH_JWKS_URL` and `AUTH_ISSUER` when set
+(our own GoTrue, see [Sign-in service](#sign-in-service-gotrue)), otherwise
+`$SUPABASE_URL/auth/v1/.well-known/jwks.json`. Staging sets the pair;
+production uses the Supabase fallback until FHS-701.
 
 ### frontend vars
 
-| Variable                        | Source        | Value                                                                 |
-| ------------------------------- | ------------- | --------------------------------------------------------------------- |
-| `VITE_SUPABASE_URL`             | MCP (FHS-189) | `https://maolytpqazmykjzdybtj.supabase.co` (staging Supabase project) |
-| `VITE_SUPABASE_ANON_KEY`        | MCP (FHS-189) | legacy HS256 anon JWT: baked into the browser bundle, safe by design  |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | MCP (FHS-189) | modern asymmetric `sb_publishable_…`: baked into the browser bundle   |
+| Variable                        | Source        | Value                                                                                         |
+| ------------------------------- | ------------- | --------------------------------------------------------------------------------------------- |
+| `VITE_SUPABASE_URL`             | MCP (FHS-189) | `https://maolytpqazmykjzdybtj.supabase.co` (staging Supabase project)                         |
+| `VITE_AUTH_URL`                 | FHS-696       | Unset (sign-in via Supabase). Set to the API address to sign in through our own GoTrue server |
+| `VITE_SUPABASE_ANON_KEY`        | MCP (FHS-189) | legacy HS256 anon JWT: baked into the browser bundle, safe by design                          |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | MCP (FHS-189) | modern asymmetric `sb_publishable_…`: baked into the browser bundle                           |
 
 The frontend service deliberately gets **only** publishable / anon
 client-safe variants. `SUPABASE_SERVICE_ROLE_KEY` and `SUPABASE_SECRET_KEY`
@@ -277,12 +277,15 @@ healthcheck (api: /health; frontend: TCP)
 public domain serves traffic
 ```
 
-Deployment triggers (one per service, per env):
+Deployment triggers (one per service, per env), as they were before the
+split, when both services built from the single repo now called
+`family-hub-web`. For today's repos see
+[Repos after the split](#repos-after-the-split-2026-10-31).
 
 | Trigger ID                             | Service  | Branch    | Repo                             |
 | -------------------------------------- | -------- | --------- | -------------------------------- |
-| `a97c3872-4e12-46ac-9883-aeb03e1bd15e` | api      | `staging` | `familyhubapp971/family-hub-app` |
-| `f3456b7a-d1a6-461c-a222-c3fa6e011550` | frontend | `staging` | `familyhubapp971/family-hub-app` |
+| `a97c3872-4e12-46ac-9883-aeb03e1bd15e` | api      | `staging` | `familyhubapp971/family-hub-web` |
+| `f3456b7a-d1a6-461c-a222-c3fa6e011550` | frontend | `staging` | `familyhubapp971/family-hub-web` |
 
 Manual deploys can be triggered via the Railway MCP
 (`mcp__railway__deployment_trigger` with a commit SHA) or by pushing
@@ -365,7 +368,7 @@ Schema migrations are forward-only. If a migration is broken:
    backup (Hobby+ plan, not yet available; documented for FHS-202).
 3. Until backups are configured, the recovery path is: re-bootstrap the
    staging Postgres volume from the Drizzle schema at
-   [`apps/api/src/db/schema.ts`](../../apps/api/src/db/schema.ts).
+   [`family-hub-api/src/database/schema.ts`](https://github.com/familyhubapp971/family-hub-api/blob/staging/src/database/schema.ts).
    Seed scripts to be added under [FHS-168](https://qualicion2.atlassian.net/browse/FHS-168);
    until then, recovery is schema-only and any test data is lost.
 
@@ -469,12 +472,12 @@ service setup is a 5-step workflow. Capturing it here so it's not
 re-derived each time.
 
 1. **Create the service** at the project level:
-   - Repo-based: `mcp__railway__service_create_from_repo({ projectId, repo: "familyhubapp971/family-hub-app", name: "<svc-name>" })`
+   - Repo-based: `mcp__railway__service_create_from_repo({ projectId, repo: "familyhubapp971/<family-hub-api or family-hub-web>", name: "<svc-name>" })`
    - Image-based: `mcp__railway__service_create_from_image({ projectId, image: "<image>:<tag>", name: "<svc-name>" })`
    - Capture the returned `serviceId`.
 2. **Configure the staging instance** via `mcp__railway__service_update`:
    - Always: `region` (no-op on trial, see [Region constraints](#region-constraints)), `buildCommand`, `startCommand`, `healthcheckPath` if applicable.
-   - **Don't** set `rootDirectory` to `apps/<svc>`: it breaks pnpm workspace resolution. Leave at the default `/`.
+   - **Don't** set `rootDirectory` to a sub-folder: it breaks pnpm workspace resolution. Leave at the default `/`.
 3. **Wire branch-based deploys** via direct GraphQL (the MCP doesn't expose `deploymentTriggerCreate`):
 
    ```graphql
@@ -485,7 +488,7 @@ re-derived each time.
          environmentId: "3fb76a04-e926-4bdf-ae03-659966366dfb"
          serviceId: "<svc-id>"
          provider: "github"
-         repository: "familyhubapp971/family-hub-app"
+         repository: "familyhubapp971/<family-hub-api or family-hub-web>"
          branch: "staging"
          checkSuites: false
        }
@@ -519,3 +522,79 @@ to neutralize the production instance before it racks up runtime.
 - [FHS-202](https://qualicion2.atlassian.net/browse/FHS-202): Configure Railway production post-upgrade
 - [FHS-155](https://qualicion2.atlassian.net/browse/FHS-155): Railway Infrastructure & DNS (parent epic)
 - [ADR 0006](../decisions/0006-branching-strategy.md): branching strategy
+
+## Sign-in service (GoTrue)
+
+Since 2026-10-31 staging signs people in with our own GoTrue server, not
+Supabase ([ADR 0022](../decisions/0022-own-sign-in-server.md)). Production
+moves in FHS-701, with a backup first and the founder's go-ahead.
+
+| Part        | Staging set-up                                                                                                                               |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Service     | `gotrue` (image `supabase/gotrue:v2.197.0`), private only at `gotrue.railway.internal:9999`, no public address                               |
+| Database    | The environment's own Postgres, `auth` schema, `gotrue` login role                                                                           |
+| Way in      | `https://fh-api-staging.up.railway.app/auth/v1/*`, passed on by the api (`GOTRUE_URL`)                                                       |
+| Passes      | ES256 keys in `GOTRUE_JWT_KEYS`. The api trusts them via `AUTH_ISSUER` (`https://fh-api-staging.up.railway.app/auth/v1`) and `AUTH_JWKS_URL` |
+| Admin calls | `GOTRUE_ADMIN_SIGNING_KEYS=${{gotrue.GOTRUE_JWT_KEYS}}` on the api. GoTrue refuses admin passes signed with the shared secret                |
+| Emails      | Resend SMTP (`smtp.resend.com:587`) from `noreply@fhapp.co`. Needs the Railway Pro plan: Hobby blocks outgoing email                         |
+| Templates   | `GOTRUE_MAILER_TEMPLATES_*` read `family-hub-api/email-templates/*.html` from GitHub (`staging` branch on staging, `main` on production)     |
+| Google      | `GOTRUE_EXTERNAL_GOOGLE_*`, same Google client as before. Redirect: `https://fh-api-staging.up.railway.app/auth/v1/callback`                 |
+| Web         | `VITE_AUTH_URL=https://fh-api-staging.up.railway.app` on the web service                                                                     |
+
+Rules learned the hard way:
+
+- `API_EXTERNAL_URL` is the bare api address. Email links get their path
+  from `GOTRUE_MAILER_URLPATHS_*=/auth/v1/verify`. Putting `/auth/v1` in
+  `API_EXTERNAL_URL` drops it from the links.
+- Never set `GOTRUE_MAILER_EXTERNAL_HOSTS`.
+- An account added by hand needs blank text (`''`), not a missing value, in
+  its four token columns, and dates in `created_at` and `updated_at`, or
+  GoTrue cannot load it.
+
+### Browser-test account
+
+The full browser run (after each merge to `staging`) signs in for real as
+`e2e@familyhub.test`, the only account on staging with a password. Its
+details live in the web repo's GitHub secrets `E2E_AUTH_USER_EMAIL` and
+`E2E_AUTH_USER_PASSWORD`. The api refuses password sign-in for every other
+address: only those listed in `PASSWORD_SIGNIN_EMAILS` on the staging api
+(`e2e@familyhub.test`) may use one (FHS-704). To replace the password, write a bcrypt hash of a
+new one into `auth.users.encrypted_password` for that address on the
+staging database, then update the secret. The quick run on every pull
+request needs no account and no secret.
+
+## Production switch (2026-10-31)
+
+[FHS-200](https://qualicion2.atlassian.net/browse/FHS-200). The live
+setup was renamed rather than rebuilt, so users saw no change.
+
+| Step              | What happened                                                                     |
+| ----------------- | --------------------------------------------------------------------------------- |
+| Backup            | Full database copy to the founder's Mac; 41 tables, 719 rows, counts verified     |
+| Promote           | First `staging` → `main` merge (PR 468); both branches identical afterwards       |
+| Old production    | The empty, never-deployed `production` environment was deleted (no volume)        |
+| Rename            | `staging` environment renamed `production`; same services, addresses and database |
+| Branch            | `api` and `frontend` deploy triggers moved from `staging` to `main`               |
+| Checks            | `/health` 200, site 200, Supabase sign-in settings point at the live address      |
+| Post-deploy smoke | `PROD_API_URL` repo variable set; `ci-deploy` passes on `main`                    |
+
+Production keeps Supabase project `maolytpqazmykjzdybtj` (labelled
+"Family Hub Staging" in Supabase). The unused Supabase project
+`bqghmbkoxjompuxixexn` was left alone.
+
+### Repos after the split (2026-10-31)
+
+| Service    | Production (`main`)                                                | Staging (`staging`)                             |
+| ---------- | ------------------------------------------------------------------ | ----------------------------------------------- |
+| `api`      | `family-hub-api`; build `pnpm build`, start `pnpm start` (FHS-690) | `family-hub-api`, fh-api-staging.up.railway.app |
+| `frontend` | `family-hub-web`                                                   | `family-hub-web`, fh-web-staging.up.railway.app |
+
+The production build command is prefixed with
+`corepack enable && pnpm install --frozen-lockfile &&`. Staging has its
+own empty database.
+
+### Before any production change
+
+1. Back up: `railway ssh -i <key> --service postgres --environment production -- 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner | gzip -9 | base64 -w 0'`, decoded locally, kept outside the repo.
+2. Record row counts for every table, and compare them after each step.
+3. Railway's built-in backups need the Pro plan, which this account does not have ([FHS-660](https://qualicion2.atlassian.net/browse/FHS-660)).

@@ -161,20 +161,20 @@ week, because a closed week carries its own actions.
 ## Where the figures come from
 
 Every number on this page is a real API response; nothing is computed from
-invented data. `formatMoney` (`packages/shared/src/money.ts`) turns every
+invented data. `formatMoney` (`family-hub-api/shared-rules/src/money.ts`) turns every
 sticker count into money using the child's own currency and sticker rate;
 no screen builds a money string by hand.
 
-| Figure                    | Source                                                                                                                                                                                      |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Who counts as a child     | `GET /api/members`, filtered with `isKidRole`                                                                                                                                               |
-| Ready to spend            | `GET /api/mw/weeks/current` for the week id, then `GET /api/mw/weeks/:id/stats` → `unallocatedStickers`                                                                                     |
-| In savings                | `GET /api/mw/financial/savings` → `savedStickers`                                                                                                                                           |
-| Growing                   | `GET /api/mw/financial/investments` → sum of `currentValueStickers`                                                                                                                         |
-| Currency + sticker rate   | `GET /api/mw/financial/savings` → `currency`, `stickerRate` (the child's own, not a hardcoded 0.5)                                                                                          |
-| Week list                 | `GET /api/mw/weeks` (reversed client-side to read newest first)                                                                                                                             |
-| A week's "earned" figure  | `GET /api/mw/weeks/:id/stats` → `totalStickers`, fetched for the visible slice (6 weeks), and for older ones only once "show older weeks" is used                                           |
-| A closed week's breakdown | `GET /api/mw/weeks/:id/actions`, summarised by `summariseWeekActions` (`packages/shared/src/week-actions.ts`, the same helper the parent My World board's finished-week recap already uses) |
+| Figure                    | Source                                                                                                                                                                                                  |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Who counts as a child     | `GET /api/members`, filtered with `isKidRole`                                                                                                                                                           |
+| Ready to spend            | `GET /api/mw/weeks/current` for the week id, then `GET /api/mw/weeks/:id/stats` → `unallocatedStickers`                                                                                                 |
+| In savings                | `GET /api/mw/financial/savings` → `savedStickers`                                                                                                                                                       |
+| Growing                   | `GET /api/mw/financial/investments` → sum of `currentValueStickers`                                                                                                                                     |
+| Currency + sticker rate   | `GET /api/mw/financial/savings` → `currency`, `stickerRate` (the child's own, not a hardcoded 0.5)                                                                                                      |
+| Week list                 | `GET /api/mw/weeks` (reversed client-side to read newest first)                                                                                                                                         |
+| A week's "earned" figure  | `GET /api/mw/weeks/:id/stats` → `totalStickers`, fetched for the visible slice (6 weeks), and for older ones only once "show older weeks" is used                                                       |
+| A closed week's breakdown | `GET /api/mw/weeks/:id/actions`, summarised by `summariseWeekActions` (`family-hub-api/shared-rules/src/week-actions.ts`, the same helper the parent My World board's finished-week recap already uses) |
 
 ## Deviations from the Magic Patterns design
 
@@ -185,7 +185,7 @@ no screen builds a money string by hand.
 | Each child had a fixed `color` field                                                               | The API has no colour field for a member. The avatar tile colour is derived deterministically from the child's id instead, so it's still stable across visits, and shows the child's real `avatarEmoji` when one is set.                                                                                                                                                                                                       |
 | `bg-kingdom` on the page background                                                                | That utility class doesn't exist in the real Tailwind preset (no `DEFAULT` shade on the `kingdom` token). Used the real class, `bg-kingdom-bg`, which renders the same purple the mock intended.                                                                                                                                                                                                                               |
 | Back button read `from=child` / `child=` query params to retrace a ChildWorld → Kids money journey | Nothing in the app sets those params today (`ChildWorldPage`'s "Kids money" menu link is a plain, un-scoped navigation). Simplified Back to always return to the dashboard rather than build a return path with no caller. The `?child=` param is still honoured if present, so a future deep link can pre-select a child.                                                                                                     |
-| "Do something with it" opened `components/MoneyActions.tsx`, a full action sheet                   | Built in FHS-623 as `apps/web/src/pages/tenant/money/MoneyActionsSheet.tsx` plus one flow per action, then **ported to the real design in FHS-630** (see the section below). FHS-623 built from the written spec because that agent had no access to the Magic Patterns tools, which is the gap FHS-630 closed.                                                                                                                |
+| "Do something with it" opened `components/MoneyActions.tsx`, a full action sheet                   | Built in FHS-623 as `src/areas/money/MoneyActionsSheet.tsx` plus one flow per action, then **ported to the real design in FHS-630** (see the section below). FHS-623 built from the written spec because that agent had no access to the Magic Patterns tools, which is the gap FHS-630 closed.                                                                                                                                |
 | Week detail only ever showed "moved to savings" and "spent on rewards"                             | Kept both, and additionally show "Invested" and "Cashed out" when they're non-zero, mirroring the same real action outcomes the parent My World board's finished-week recap (FHS-608) already surfaces, so a week that invested or cashed out doesn't read as if nothing happened to that money.                                                                                                                               |
 | Claim a reward hardcoded six rewards                                                               | Reads the family's real shop, `GET /api/rewards?memberId=`. A reward costing more than the child's real balance (the server's own `stickerBalance`, not a client guess) cannot be picked: its row is disabled with a "needs N more stickers" note.                                                                                                                                                                             |
 | Invest and grow never asked for a multiplier or a skipped-day rule                                 | Both are now real fields (`coefficient` 1/2/3/5, `deductible` on/off) and both are sent on `POST /api/mw/financial/investments`, which the server has always accepted but this app had never sent.                                                                                                                                                                                                                             |
@@ -216,7 +216,7 @@ design (`components/MoneyActions.tsx`, editor `kudjspxd3xxroueg5jw11o`).
 
 | In the design                                                                             | What shipped, and why                                                                                                                                                                                                                                          |
 | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `utils/money.ts` hardcodes a 0.50 sticker rate and reads the currency from `localStorage` | Never copied. Every figure goes through `formatMoney` from `packages/shared` with the family's real currency and the real rate from `GET /api/mw/financial/savings`.                                                                                           |
+| `utils/money.ts` hardcodes a 0.50 sticker rate and reads the currency from `localStorage` | Never copied. Every figure goes through `formatMoney` from `shared-rules` (family-hub-api) with the family's real currency and the real rate from `GET /api/mw/financial/savings`.                                                                             |
 | Six hardcoded rewards                                                                     | Still the family's own shop, as FHS-623 shipped it.                                                                                                                                                                                                            |
 | Three multipliers: 2x, 3x, 5x                                                             | Four: 1x, 2x, 3x, 5x. The server accepts 1 (no boost) and a parent should be able to invest without one.                                                                                                                                                       |
 | Nothing on screen before the first choice                                                 | A short line says what to pick first ("Pick a habit to choose how much it pays and how many stickers go behind it"). The design left the sheet ending in nothing, which reads as broken. This is the one place the port deliberately adds rather than matches. |
@@ -232,7 +232,7 @@ differences on sight, one of which was a real bug.
 emoji. The sheets rendered the stored value directly, so a habit row read
 "heart" in a grey box. The same bug class was fixed once before (FHS-374) by a
 helper that lived inside the kid pages, out of reach of anything else, so it was
-reintroduced somewhere new. That helper now lives in `packages/ui/habitIcon.tsx`
+reintroduced somewhere new. That helper now lives in `design-system/habitIcon.tsx`
 so there is one copy every screen can reach, and two tests fail if a habit icon
 ever renders as raw text again.
 
@@ -275,20 +275,20 @@ full reload, since they always come from the same real endpoints.
 
 ### Design-system additions
 
-- `packages/ui/src/StepHeading.tsx` (FHS-630): the numbered step heading from
+- `design-system/src/StepHeading.tsx` (FHS-630): the numbered step heading from
   the design. One disc, one question, the action's colour. Used by all five
   sheets so a parent can see how many answers are wanted.
-- `packages/ui/src/StickerAmountPicker.tsx`: a whole-number +/- stepper for
+- `design-system/src/StickerAmountPicker.tsx`: a whole-number +/- stepper for
   picking a count of stickers, paired with a money preview line. Sibling to
   `AmountPicker`, which works in minor currency units instead. FHS-630 added
   the design's optional one-tap "Use all N" shortcut.
-- `packages/ui/src/Dialog.tsx` gained a real focus trap (Tab/Shift+Tab
+- `design-system/src/Dialog.tsx` gained a real focus trap (Tab/Shift+Tab
   cycle inside the dialog, focus returns to whatever opened it on close)
   and an `align="bottom-sheet"` variant (pinned to the bottom edge on a
   phone, a centred panel from `sm:` up). Both are additive: every existing
   `Dialog`/`ConfirmDialog` consumer keeps its current behaviour unless it
   opts into the new variant.
-- `packages/ui/src/ChoiceRow.tsx` gained an optional `disabled` prop, used
+- `design-system/src/ChoiceRow.tsx` gained an optional `disabled` prop, used
   by the reward and habit pickers to grey out an option that cannot be
   chosen.
 
@@ -423,7 +423,7 @@ that finishes a week is replaced with a line saying the week is closed.
 Otherwise a parent could close the brand new empty week one tap after closing
 the last one, and the server only refuses a week dated in the future.
 
-The guard for the reload itself lives in `tests/unit/web/tenant/child/MyWorldTab.test.tsx`,
+The guard for the reload itself lives in `tests/unit/web/areas/my-world/MyWorldTab.test.tsx`,
 not in the sheet's own tests: the sheet was never the broken part, so a test that
 renders it alone passes on the broken code too. It holds the post-close refresh
 open and fails if the board swaps itself for the loading screen. `close-week.feature`

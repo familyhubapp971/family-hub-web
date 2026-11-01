@@ -1,9 +1,6 @@
 {
   "// reason": "Repo-shared settings. Only adds what the IDE can't infer on its own: currently just the Cucumber extension's path config so .feature files resolve their step definitions and stop showing 'Undefined step' warnings. Nothing else here so personal editor preferences (format-on-save, theme, etc.) stay out of the repo.",
-  "cucumber.features": [
-    "tests/e2e/features/**/*.feature",
-    "tests/integration/features/**/*.feature"
-  ],
-  "cucumber.glue": ["tests/e2e/steps/**/*.ts", "tests/integration/steps/**/*.ts"],
+  "cucumber.features": ["tests/e2e/features/**/*.feature"],
+  "cucumber.glue": ["tests/e2e/steps/**/*.ts"],
   "cucumber.parameterTypes": []
 }

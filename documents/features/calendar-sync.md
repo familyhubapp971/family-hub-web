@@ -106,7 +106,7 @@ The scenario names above match the integration feature file
 `tests/integration/features/calendar-feed.feature` character-for-character; the
 ICS/token internals are unit-tested in
 `tests/unit/api/lib/calendar-feed.test.ts`, and the card in
-`tests/unit/web/tenant/dashboard/CalendarSyncCard.test.tsx`. A browser E2E that
+`tests/unit/web/areas/calendar/CalendarSyncCard.test.tsx`. A browser E2E that
 subscribes a real Google/Apple/Outlook calendar is not automatable in CI (those
 apps can't be driven headlessly), so the API contract is covered at the
 integration tier and the UI at the web-unit tier instead.

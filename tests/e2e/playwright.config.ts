@@ -1,5 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 import { defineBddConfig } from 'playwright-bdd';
+import { linkApiRepo } from './support/api-repo.js';
+import { STAGING_AUTH_URL, trustSettings } from './support/auth/env.js';
 
 // In CI the workflow exports DATABASE_URL with credentials matching the
 // `postgres:16-alpine` service (e.g. fh_test:fh_test@localhost). Inline
@@ -8,14 +10,15 @@ import { defineBddConfig } from 'playwright-bdd';
 // the API process tried to connect anonymously and every DB-touching
 // endpoint failed in CI. Inherit DATABASE_URL when set; fall back to
 // the local-dev convention only when it isn't.
+// FHS-688: the server comes from the family-hub-api repo, not this one.
+const apiDir = linkApiRepo();
 const apiDatabaseUrl = process.env.DATABASE_URL ?? 'postgres://localhost:5432/familyhub_test';
 
-// FHS-545: this full matrix does NOT set E2E_TEST_JWKS on the api. Its one
-// authed spec (auth.feature, FHS-196) does a REAL Supabase login and must be
-// verified against the REAL Supabase JWKS, so the api boots exactly as it did
-// pre-FHS-516 (SUPABASE_URL from the CI job env / repo .env.local, no test
-// override). The test-JWKS harness's @authed-local specs are excluded from
-// this matrix (see the `tags` filter below) and run only in
+// FHS-545 / FHS-700: this full matrix does NOT set E2E_TEST_JWKS on the api.
+// Its one authed spec (auth.feature, FHS-196) does a REAL password sign-in on
+// our staging sign-in service, so the local api trusts that service's public
+// keys (trustSettings below). The test-key harness's @authed-local specs are
+// excluded from this matrix (see the `tags` filter below) and run only in
 // playwright.critical.config.ts, which DOES wire E2E_TEST_JWKS.
 
 // Generates Playwright spec files from .feature files into .features-gen/.
@@ -77,11 +80,11 @@ export default defineConfig({
   //
   webServer: [
     {
-      // FHS-545: no E2E_TEST_JWKS here: the api validates against the REAL
-      // Supabase JWKS (via SUPABASE_URL from the CI job env / .env.local) so
-      // auth.feature's real login works. In CI, VITE_API_URL is unset (its
+      // FHS-545 / FHS-700: no E2E_TEST_JWKS here: the api checks passes
+      // against the staging sign-in service's real public keys, so
+      // auth.feature's real sign-in works. In CI, VITE_API_URL is unset (its
       // .env.development.local is gitignored), so the web app calls this local
-      // api, which is exactly why it must trust real Supabase tokens.
+      // api, which is exactly why it must trust that service.
       // FHS-635: RATE_LIMIT_PER_MINUTE=0 disables the api's per-IP token bucket
       // for this run, which .env.example documents as the setting for test runs.
       // Every Playwright worker drives the browser from the same machine, so
@@ -91,23 +94,26 @@ export default defineConfig({
       // (server 429)". That is what made role-permissions and the money-row
       // recap fail at random, always fail on a developer machine (more workers
       // than CI runs), and pass the moment they were run on their own.
-      command: `NODE_ENV=test PORT=3001 LOG_LEVEL=error RATE_LIMIT_PER_MINUTE=0 DATABASE_URL=${apiDatabaseUrl} pnpm --filter @familyhub/api dev`,
+      command: `NODE_ENV=test PORT=3001 LOG_LEVEL=error RATE_LIMIT_PER_MINUTE=0 DATABASE_URL=${apiDatabaseUrl} pnpm --dir "${apiDir}" dev`,
       url: 'http://localhost:3001/health',
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
+      env: trustSettings(STAGING_AUTH_URL),
     },
     {
       command: 'pnpm --filter @familyhub/web dev',
       url: 'http://localhost:5273',
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
-      // FHS-516: the full matrix deliberately does NOT override VITE_API_URL:
-      // its one authed spec (auth.feature, FHS-196) does a REAL Supabase login
-      // and needs the real staging api that trusts real Supabase tokens (which
-      // apps/web/.env.development.local already points VITE_API_URL at). The
-      // test-JWKS harness's @authed-local specs, which need the local api, are
-      // excluded from this matrix (see the `tags` filter above) and run in
-      // playwright.critical.config.ts, which pins VITE_API_URL at the local api.
+      // FHS-516: the full matrix deliberately does NOT override VITE_API_URL.
+      // Locally .env.development.local points it at the staging api; in CI it
+      // is unset, so the web calls the local api above. Both trust the staging
+      // sign-in service. The test-key harness's @authed-local specs, which need
+      // the local api, are excluded from this matrix (see the `tags` filter
+      // above) and run in playwright.critical.config.ts.
+      // FHS-700: VITE_AUTH_URL makes the sign-in client read the session that
+      // auth.feature stores under the staging sign-in address's key.
+      env: { VITE_AUTH_URL: STAGING_AUTH_URL },
     },
   ],
 });

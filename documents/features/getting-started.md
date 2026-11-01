@@ -141,12 +141,12 @@ override stands in (see the note above).
 
 ## Implementation notes
 
-- Component: `apps/web/src/pages/tenant/dashboard/GetStarted.tsx`, mounted above
+- Component: `src/areas/today/GetStarted.tsx`, mounted above
   `TodayTabPanel` on the dashboard home tab (`DashboardPage.tsx`).
 - API: `GET /api/onboarding/get-started` returns `{ dismissed, steps, firstKidId }`;
   `POST /api/onboarding/get-started/dismiss` hides it. Both admin-only (403
-  otherwise), both in `apps/api/openapi.json`.
-- Step rules live in `apps/api/src/lib/get-started.ts`; `deriveGetStartedSteps`
+  otherwise), both in `family-hub-api/api-docs/openapi.json`.
+- Step rules live in `family-hub-api/src/areas/family/get-started.ts`; `deriveGetStartedSteps`
   is pure so the rules are unit-tested without a database.
 - Migration `0045_get_started_state.sql` adds the two nullable columns; rollback
   in `drizzle/down/`.

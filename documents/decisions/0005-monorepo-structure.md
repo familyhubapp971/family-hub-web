@@ -1,6 +1,6 @@
 # 0005: Monorepo structure
 
-**Status:** accepted
+**Status:** superseded by 0021
 **Date:** 2026-04-24
 **Jira:** [FHS-174](https://qualicion2.atlassian.net/browse/FHS-174)
 

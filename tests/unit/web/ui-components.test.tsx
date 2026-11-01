@@ -12,7 +12,7 @@ import {
   PricingCard,
   FloatingDecorations,
   ConfirmDialog,
-} from '../../../packages/ui/src';
+} from '../../../design-system/src';
 
 // Sanity tests for the FHS-242 design-system extensions:
 //   - Button.fullWidth → adds `w-full`

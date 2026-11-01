@@ -121,7 +121,7 @@ def auth_headers() -> dict:
         "Authorization": f"Basic {token}",
         "Accept": "application/json",
         "Content-Type": "application/json",
-        "User-Agent": "family-hub-app/refresh-confluence-epics-page",
+        "User-Agent": "family-hub-web/refresh-confluence-epics-page",
     }
 
 

@@ -76,7 +76,7 @@ holds, it has to live on the server, not in the browser.
 | -------------- | ------------------------------------------------------------------------------------------------------------------ |
 | The passcode   | `2FH3`. Case is folded, so `2fh3` works. Surrounding spaces from a paste are ignored                               |
 | The screen     | Kingdom purple starfield, a padlock disc, the wordmark, one line of copy, four cells, one error line. Nothing else |
-| Where it sits  | Above the router in `apps/web/src/main.tsx`, so there is one entry point rather than one per route                 |
+| Where it sits  | Above the router in `src/app/main.tsx`, so there is one entry point rather than one per route                      |
 | What it hides  | Everything, including the marketing pages. While locked, no route resolves and no lazy chunk is downloaded         |
 | Staying in     | A timestamp in `localStorage`, so a refresh or a second tab does not ask again                                     |
 | Timing out     | 30 minutes without a click, keypress, wheel, touch or scroll. The stamp is deleted when it locks                   |

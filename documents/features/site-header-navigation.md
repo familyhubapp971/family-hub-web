@@ -107,7 +107,7 @@ primary one, not a fallback.
 
 ## Out of scope
 
-- The signed-in app navigation (`TopNav` in `packages/ui`), which uses a
+- The signed-in app navigation (`TopNav` in `design-system`), which uses a
   scrolling tab strip rather than a burger.
 - The footer, which already stacks on phones.
 

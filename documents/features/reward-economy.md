@@ -204,7 +204,7 @@ Every invested habit says so on its row, and the Active Investments card reads
 as a list rather than a stack of cards. Ported from the Magic Patterns design
 (FHS-583).
 
-- **The tag** is a shared design-system component (`packages/ui/InvestmentTag`):
+- **The tag** is a shared design-system component (`design-system/InvestmentTag`):
   two pills, the kind (red warning + "Deductible", or green shield + "No
   penalty") then a yellow chart + "Invested · Nx", where N is the investment's
   own coefficient (FHS-534). Colour is never the only signal: each pill carries
@@ -258,7 +258,7 @@ having two kinds.
 ### Money is formatted, never concatenated
 
 Every money figure on the board goes through `formatMoney` in
-`packages/shared/src/money.ts`, which wraps `Intl.NumberFormat` with the family's
+`family-hub-api/shared-rules/src/money.ts`, which wraps `Intl.NumberFormat` with the family's
 currency (`tenants.currency`, chosen at onboarding) and the viewer's own locale.
 Hand-built strings like `` `${currency} ${x.toFixed(2)}` `` only ever looked right
 for codes that sit in front with a space: they render "USD 7.50" instead of
@@ -339,7 +339,7 @@ than a live screen. Ported from the Magic Patterns design.
   "{percent}% of the week's habits were done."
 
 The action split is one shared function, `summariseWeekActions` in
-`packages/shared/src/week-actions.ts`. The parent board and the kid recap each
+`family-hub-api/shared-rules/src/week-actions.ts`. The parent board and the kid recap each
 kept their own copy of the same filters, and they had already drifted: the kid's
 copy never netted withdrawals, so a week that invested 10 and pulled 4 back
 showed the child "Planted 10" while the parent's card said 6. Both now read the
@@ -367,7 +367,7 @@ longer drift apart once one arrives.
 
 **Fixed in [FHS-616](https://qualicion2.atlassian.net/browse/FHS-616):** a
 closed week's habit list is now scoped to that week, not to whichever habits
-the child has today. `loadHabitsForWeek` (`apps/api/src/lib/myworld.ts`)
+the child has today. `loadHabitsForWeek` (`family-hub-api/src/areas/my-world/myworld.ts`)
 branches on `week.isFinalized`: a finalized week returns only habits created
 before the week actually closed (read from `closureSnapshot.capturedAt`,
 since a week can close early, mid-week, not just at the calendar boundary)
@@ -400,7 +400,7 @@ helper. Covered by
   `/^[A-Z]{3}$/`, so `POST /api/onboarding/complete` and
   `PUT /api/admin/settings/currency` would both have stored JPY happily, and
   every screen would then have read a hundred times too small. Both now share
-  the picker's rule via `isSupportedCurrency()` in `packages/shared/src/money.ts`,
+  the picker's rule via `isSupportedCurrency()` in `family-hub-api/shared-rules/src/money.ts`,
   which is the single copy of it. Full multi-decimal support (native minor units and
   currency-aware display everywhere) is still the follow-up if a 0/3-decimal
   market is needed; remove the fence then, not before.
@@ -425,7 +425,7 @@ helper. Covered by
 ## Implementation notes
 
 - **Money resolver:** `effectiveRateMinor(child, family)` in
-  `apps/api/src/lib/reward-config.ts` picks the child's own
+  `family-hub-api/src/areas/my-world/reward-config.ts` picks the child's own
   `stickerRateMinor` if set, else the family default, every money read
   site in the API goes through this resolver instead of a hardcoded constant.
 - **Per-child data flow:** each kid's board reads _their own_ effective rate

@@ -33,9 +33,7 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: '${{ env.NODE_VERSION }}', cache: 'pnpm' }
       - run: pnpm install --frozen-lockfile
-      - run: pnpm -r typecheck
-      - name: OpenAPI spec is up to date (FHS-356)
-        run: pnpm -F api openapi:check
+      - run: pnpm typecheck
 
   unit:
     name: Unit tests — frontend + backend + shared
@@ -56,36 +54,6 @@ jobs:
           name: coverage-pr-staging
           path: coverage/
 
-  integration:
-    name: Integration tests (with database)
-    runs-on: ubuntu-latest
-    timeout-minutes: 8
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: familyhub_test
-          POSTGRES_USER: fh_test
-          POSTGRES_PASSWORD: fh_test
-        ports: ['5433:5432']
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 1s
-          --health-timeout 5s
-          --health-retries 30
-    env:
-      DATABASE_URL_TEST: postgres://fh_test:fh_test@localhost:5433/familyhub_test
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with: { version: '${{ env.PNPM_VERSION }}' }
-      - uses: actions/setup-node@v4
-        with: { node-version: '${{ env.NODE_VERSION }}', cache: 'pnpm' }
-      - run: pnpm install --frozen-lockfile
-      # Skip the local docker compose pretest hook in CI — the service
-      # container above replaces it.
-      - run: pnpm exec vitest run --config tests/integration/vitest.config.ts
-
   e2e-critical:
     name: Smoke test (Critical Journeys)
     runs-on: ubuntu-latest
@@ -104,6 +72,7 @@ jobs:
           --health-timeout 5s
           --health-retries 30
     env:
+      FH_API_DIR: ${{ github.workspace }}/.ci-api
       DATABASE_URL: postgres://fh_test:fh_test@localhost:5432/familyhub_test
     steps:
       - uses: actions/checkout@v4
@@ -112,6 +81,13 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: '${{ env.NODE_VERSION }}', cache: 'pnpm' }
       - run: pnpm install --frozen-lockfile
+      # FHS-688: the browser tests boot the server from family-hub-api.
+      - uses: actions/checkout@v4
+        with:
+          repository: familyhubapp971/family-hub-api
+          ref: staging
+          path: .ci-api
+      - run: pnpm --dir .ci-api install --frozen-lockfile
       - name: Cache Playwright browsers
         id: pw-cache
         uses: actions/cache@v4
@@ -125,16 +101,10 @@ jobs:
         run: pnpm -F @familyhub/e2e exec playwright install --with-deps chromium
       - name: Apply DB migrations for the e2e api
         # FHS-277 — see ci-staging.yml: the booted api needs a schema.
-        run: pnpm --filter @familyhub/api exec drizzle-kit migrate
+        run: pnpm --dir .ci-api exec drizzle-kit migrate
+      # FHS-700: no secrets. The signed-in specs use a pass made with the fixed
+      # test key, which the local api is told to trust.
       - run: pnpm -F @familyhub/e2e test:e2e:critical
-        env:
-          # FHS-277 — the api webServer needs the server-side var too,
-          # else auth fail-closes and signed-in @critical flows 401.
-          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-          E2E_USER_EMAIL: ${{ secrets.E2E_USER_EMAIL }}
-          E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4

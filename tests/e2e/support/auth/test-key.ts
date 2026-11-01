@@ -1,7 +1,7 @@
 // FHS-516: fixed ES256 keypair used ONLY to mint test JWTs for the E2E
 // authed-page fixture. This is not a production secret: the api only
 // trusts it when the operator explicitly sets E2E_TEST_JWKS (see
-// apps/api/src/middleware/auth.ts + config.ts), which never happens outside
+// family-hub-api src/security/auth.ts + config.ts), which never happens outside
 // a local or CI e2e run: config.ts refuses to boot a production process
 // with that var set at all.
 //

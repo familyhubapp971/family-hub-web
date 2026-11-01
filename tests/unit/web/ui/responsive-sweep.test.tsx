@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
-import { Card } from '../../../../packages/ui/src/Card';
-import { AvatarGrid } from '../../../../packages/ui/src/AvatarGrid';
-import { AvatarEmojiPicker } from '../../../../packages/ui/src/AvatarEmojiPicker';
-import { SearchableSelect } from '../../../../packages/ui/src/SearchableSelect';
+import { Card } from '../../../../design-system/src/Card';
+import { AvatarGrid } from '../../../../design-system/src/AvatarGrid';
+import { AvatarEmojiPicker } from '../../../../design-system/src/AvatarEmojiPicker';
+import { SearchableSelect } from '../../../../design-system/src/SearchableSelect';
 
 // FHS-548: responsive sweep regression tests.
 //

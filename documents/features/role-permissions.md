@@ -262,7 +262,7 @@ The dividing line is **whether the action can be undone**:
 - **Family settings keeps its admin-only redirect.** Unlike Earning rules,
   there is nothing on it for a non-admin to read, so there is no read-only
   view to fall back to.
-- Both predicates live in `packages/shared` (`isGrownUpRole`,
+- Both predicates live in `shared-rules` (family-hub-api) (`isGrownUpRole`,
   `isFamilyAdminRole`) and are pinned to the API's own `canManage` / `isAdmin`
   by `tests/unit/shared/family-permissions.test.ts`, so the menu cannot drift
   from what the server enforces.

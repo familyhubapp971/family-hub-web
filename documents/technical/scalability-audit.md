@@ -32,8 +32,8 @@ Each: what it is in plain words, then the technical detail, then the fix + ticke
 - **Plain:** Each request grabs 1 of only 10 database connections and keeps it
   until the whole page's work is done. Queries run one-after-another on it, so
   "do these in parallel" in the code doesn't actually run them in parallel.
-- **Technical:** `runWithRequestDb` ([apps/api/src/middleware/request-db.ts](../../apps/api/src/middleware/request-db.ts))
-  pins one pooled `pg.Client` (pool `max: 10`, [db/client.ts:25](../../apps/api/src/db/client.ts))
+- **Technical:** `runWithRequestDb` ([family-hub-api/src/security/request-db.ts](https://github.com/familyhubapp971/family-hub-api/blob/staging/src/security/request-db.ts))
+  pins one pooled `pg.Client` (pool `max: 10`, [db/client.ts:25](https://github.com/familyhubapp971/family-hub-api/blob/staging/src/database/client.ts))
   for the request lifetime to carry the per-request RLS tenant GUC. A single
   `pg` client is serial, so `Promise.all` in handlers gives **no** concurrency.
   Connection hold time = full handler duration. `connectionTimeoutMillis: 5000`
@@ -48,7 +48,7 @@ Each: what it is in plain words, then the technical detail, then the fix + ticke
 - **Plain:** Opening the home screen fires about 25 separate database
   questions, one after another. Fewer, smarter questions = much faster, and it
   frees the connection sooner (helps #1 for free).
-- **Technical:** `GET /api/dashboard/today` ([routes/dashboard.ts](../../apps/api/src/routes/dashboard.ts))
+- **Technical:** `GET /api/dashboard/today` ([routes/dashboard.ts](https://github.com/familyhubapp971/family-hub-api/blob/staging/src/areas/today/dashboard.ts))
   = ~19 fixed queries + ~2 per kid. The recent-activity feed reads several full
   tables then merges + sorts in JS to `slice(0,5)`. Even at 5–10ms/query
   internal latency that's a 100–200ms floor on the most-loaded screen.
@@ -63,8 +63,8 @@ Each: what it is in plain words, then the technical detail, then the fix + ticke
   a second server and each keeps its own count, so the limits leak, and a
   PIN-guesser gets twice the attempts. This blocks "just add servers" to cope
   with #1.
-- **Technical:** in-memory `Map` in [middleware/rate-limit.ts:29](../../apps/api/src/middleware/rate-limit.ts)
-  and [routes/auth-kid-pin.ts:63](../../apps/api/src/routes/auth-kid-pin.ts).
+- **Technical:** in-memory `Map` in [middleware/rate-limit.ts:29](https://github.com/familyhubapp971/family-hub-api/blob/staging/src/security/rate-limit.ts)
+  and [routes/auth-kid-pin.ts:63](https://github.com/familyhubapp971/family-hub-api/blob/staging/src/areas/kids/auth-kid-pin.ts).
   The kid-PIN one is also a **security** concern (brute-force budget × replica
   count).
 - **Fix:** move both to Redis **before** the first horizontal scale-out.
@@ -102,8 +102,8 @@ Each: what it is in plain words, then the technical detail, then the fix + ticke
 - **Technical:** `taskRows` (no `LIMIT`, no `member`/`done` filter), `txRows`
   (all savings transactions, summed in JS), and the My World `listInvestments`
   N+1 (`Promise.all` of 2 `count()` per investment, serial on the one
-  connection anyway). All in [dashboard.ts](../../apps/api/src/routes/dashboard.ts)
-  / [lib/myworld.ts](../../apps/api/src/lib/myworld.ts).
+  connection anyway). All in [dashboard.ts](https://github.com/familyhubapp971/family-hub-api/blob/staging/src/areas/today/dashboard.ts)
+  / [lib/myworld.ts](https://github.com/familyhubapp971/family-hub-api/blob/staging/src/areas/my-world/myworld.ts).
 - **Fix:** `LIMIT` every list/feed; push sums into SQL `GROUP BY`; one grouped
   count for investments.
 
@@ -112,9 +112,9 @@ Each: what it is in plain words, then the technical detail, then the fix + ticke
 - **Plain:** Every request re-asks the database for unchanging facts (this
   family's id, its currency/timezone) and writes a "last seen" row for the user
   even when nothing changed, which is wasted work on 100% of requests.
-- **Technical:** slug→id ([resolve-tenant.ts](../../apps/api/src/middleware/resolve-tenant.ts)),
+- **Technical:** slug→id ([resolve-tenant.ts](https://github.com/familyhubapp971/family-hub-api/blob/staging/src/security/resolve-tenant.ts)),
   currency/timezone, `loadCaller`, and an `INSERT … ON CONFLICT DO UPDATE` on
-  `users` ([auth.ts](../../apps/api/src/middleware/auth.ts)) every call (a WAL
+  `users` ([auth.ts](https://github.com/familyhubapp971/family-hub-api/blob/staging/src/security/auth.ts)) every call (a WAL
   write on every read).
 - **Fix:** short-TTL per-replica cache for the immutable lookups; only write
   `users` on change/first-seen.
@@ -142,7 +142,7 @@ Each: what it is in plain words, then the technical detail, then the fix + ticke
 
 The old performance tests only pinged `/health` and `/hello`: no login, no
 database, no family data, so they proved nothing about real scale. The new
-suite (FHS-460, see [tests/performance/README.md](../../tests/performance/README.md))
+suite (FHS-460, see [tests/performance/README.md](https://github.com/familyhubapp971/family-hub-api/blob/staging/tests/performance/README.md))
 drives **real logged-in parent + kid sessions** through the actual hot screens
 (dashboard, kid dashboard, My World, learn), so a load run measures what a real
 morning rush would feel like. Caveat baked into the docs: the API rate-limits

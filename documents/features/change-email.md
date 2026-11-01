@@ -17,7 +17,7 @@ change only after an explicit tap.
 > admin-changes-anyone flow. The founder reversed that design before wider
 > rollout: a member may only ever change their own sign-in email. The
 > backend now rejects any attempt to target another member's row
-> (`apps/api/src/routes/members.ts`, `POST /api/members/:id/email-change`)
+> (`family-hub-api/src/areas/family/members.ts`, `POST /api/members/:id/email-change`)
 > with a 403, regardless of the caller's role. This doc reflects the
 > shipped self-serve behaviour, not the original pitch.
 

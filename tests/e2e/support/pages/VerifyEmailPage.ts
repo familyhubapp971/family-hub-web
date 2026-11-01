@@ -15,7 +15,7 @@ export class VerifyEmailPage {
 
   // Provider-aware: button label + URL adapt to the user's email
   // domain. Known consumer providers render with their webmail link;
-  // unknown / workplace domains hide the button. See apps/web/src/lib/webmail.ts.
+  // unknown / workplace domains hide the button. See src/app/lib/webmail.ts.
   openMailboxLink() {
     return this.page.getByTestId('verify-email-open-mailbox');
   }

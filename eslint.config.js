@@ -1,6 +1,5 @@
-// ESLint flat config: root for the whole monorepo. Single source of
-// truth so apps/api, apps/web, packages/* all lint against the same
-// rules without per-package configs drifting.
+// ESLint flat config for the web repo: one config for the web site (src/),
+// design-system/, tests and scripts, so nothing drifts.
 //
 // Bootstrap stance (Sprint 0): minimal, opinionated rules. ESLint
 // recommended + typescript-eslint recommended + react/react-hooks/jsx-a11y
@@ -31,6 +30,11 @@ export default tseslint.config(
       '**/playwright-report*/**',
       '**/test-results*/**',
       '**/.features-gen*/**',
+      'tests/e2e/.api-repo/**',
+      // Local-only folders other coding tools create; never committed.
+      '.agents/**',
+      '.codex/**',
+      '.ci-api/**',
       '**/tests/performance/reports/**',
       // Vendored Claude Code skill scripts: not our code, not our lint rules.
       '.claude/**',
@@ -55,9 +59,7 @@ export default tseslint.config(
   },
 
   // 4. JSX/TSX everywhere: enable the JSX parser feature for any tsx
-  //    file regardless of which workspace, so future tsx outside
-  //    web/ui (e.g. in packages/shared) parses correctly. Plugin
-  //    registration is scoped to web/ui in the next block.
+  //    file. Plugin registration is scoped in the next block.
   {
     files: ['**/*.{tsx,jsx}'],
     languageOptions: {
@@ -65,14 +67,10 @@ export default tseslint.config(
     },
   },
 
-  // 4b. React + hooks + a11y plugins for apps/web, packages/ui, and the
-  //     test-utils web wrapper (which also renders JSX).
+  // 4b. React + hooks + a11y plugins for the web site (src/) and the
+  //     design system.
   {
-    files: [
-      'apps/web/**/*.{ts,tsx,js,jsx}',
-      'packages/ui/**/*.{ts,tsx,js,jsx}',
-      'packages/test-utils/src/web/**/*.{ts,tsx}',
-    ],
+    files: ['src/**/*.{ts,tsx,js,jsx}', 'design-system/**/*.{ts,tsx,js,jsx}'],
     plugins: {
       react,
       'react-hooks': reactHooks,
@@ -95,16 +93,9 @@ export default tseslint.config(
     },
   },
 
-  // 5. Node globals for api / scripts / configs / tests.
+  // 5. Node globals for scripts / configs / tests.
   {
-    files: [
-      'apps/api/**/*.{ts,js,mjs,cjs}',
-      'packages/shared/**/*.{ts,js}',
-      'packages/test-utils/**/*.{ts,js}',
-      'tests/**/*.{ts,js,mjs}',
-      '**/*.config.{ts,js,mjs,cjs}',
-      'scripts/**/*.{js,mjs,ts}',
-    ],
+    files: ['tests/**/*.{ts,js,mjs}', '**/*.config.{ts,js,mjs,cjs}', 'scripts/**/*.{js,mjs,ts}'],
     languageOptions: {
       globals: { ...globals.node },
     },

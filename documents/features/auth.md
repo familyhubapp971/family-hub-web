@@ -4,8 +4,12 @@
 **Status:** in-progress
 **Owner:** product-manager
 
-Supabase Auth is the source of truth for identity (see
-[ADR 0003](../decisions/0003-auth-library.md)). This doc covers the
+The sign-in service is the source of truth for identity: our own GoTrue
+server on staging, and Supabase Auth on production until FHS-701 (see
+[ADR 0022](../decisions/0022-own-sign-in-server.md), which replaced
+[ADR 0003](../decisions/0003-auth-library.md)). GoTrue is the software
+Supabase runs, so every flow below behaves the same on both; where a step
+says "Supabase", read "the sign-in service". This doc covers the
 user-facing web flows shipped under FHS-190: signup, login (email +
 Google), logout, password reset request, and the OAuth callback. JWT
 verification on the api (FHS-191) and the user-mirror sync

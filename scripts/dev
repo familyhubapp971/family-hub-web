@@ -1,18 +1,14 @@
 #!/usr/bin/env bash
 # ./scripts/dev: one-command local development.
 #
-# Spins up dev Postgres → applies Drizzle migrations → boots api + web
-# in parallel via the existing root `pnpm dev` (`pnpm -r --parallel
-# --stream dev`). Clean teardown on Ctrl-C: stops api/web, leaves the
-# Postgres container running so the next `./scripts/dev` is instant.
-# To stop the database too: `pnpm dev:down`.
+# Boots the web site via the root `pnpm dev`. The server and its
+# database run from the family-hub-api repo (ADR 0021).
 #
-# Requires: docker (Compose v2), pnpm, .env.local. If .env.local is
+# Requires: pnpm, .env.local. If .env.local is
 # missing it's created from .env.example as a courtesy.
 
 set -euo pipefail
 
-command -v docker >/dev/null || { echo "✗ docker not found on PATH" >&2; exit 1; }
 command -v pnpm   >/dev/null || { echo "✗ pnpm not found on PATH"   >&2; exit 1; }
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -23,16 +19,8 @@ if [[ ! -f .env.local ]]; then
   cp .env.example .env.local
 fi
 
-echo "→ Starting dev Postgres (docker compose up -d --wait)..."
-docker compose up -d --wait
-
-echo "→ Applying Drizzle migrations (drizzle-kit push)..."
-# Schema is intentionally empty until Sprint 1 (ADR 0001). Until then
-# `db:push` is a no-op that confirms the connection. Once tenants/users
-# land it'll apply schema changes idempotently.
-pnpm --filter @familyhub/api db:push
-
-echo "→ Booting api (:3001) + web (:5173): Ctrl-C to stop..."
-# exec so signal/exit semantics from `pnpm dev` pass through transparently
-# (Ctrl-C reaches api + web; non-zero exits aren't reframed by the wrapper).
+# FHS-688: the server lives in family-hub-api. Start it there first
+# (its own scripts bring up Postgres and the api on :3001).
+echo "→ Start the server from family-hub-api first (pnpm dev there)."
+echo "→ Booting web (:5273): Ctrl-C to stop..."
 exec pnpm dev

@@ -8,7 +8,7 @@ the system is built; the _what_ and _why_ live in
 
 - Architecture overviews when a major system component is introduced.
 - API contracts when a new public surface stabilises (the OpenAPI spec
-  itself lives in `apps/api/openapi.json`: link from here, don't duplicate).
+  itself lives in `family-hub-api/api-docs/openapi.json`: link from here, don't duplicate).
 - Data model docs (ERDs, schema rationale) when tables are added or
   reshaped beyond a routine migration.
 - Sequence diagrams or runbooks when a flow spans multiple services or
@@ -49,9 +49,9 @@ _Initial seed, populate as docs are added:_
 
 ## API docs and test collection
 
-- **Spec:** [`apps/api/openapi.json`](../../apps/api/openapi.json), generated
+- **Spec:** [`family-hub-api/api-docs/openapi.json`](https://github.com/familyhubapp971/family-hub-api/blob/staging/api-docs/openapi.json), generated
   from the live routes. Browse it at `/docs` on any non-production API.
-- **Postman:** [`apps/api/postman/`](../../apps/api/postman/) holds the test
+- **Postman:** [`family-hub-api/api-docs/postman/`](https://github.com/familyhubapp971/family-hub-api/blob/staging/api-docs/postman/) holds the test
   collection plus `local` and `staging` environments, built from the spec.
   The same command keeps a local, gitignored copy in `documents/postman/` for
   sharing with testers.
@@ -63,5 +63,5 @@ _Initial seed, populate as docs are added:_
   family. Set `tenantSlug` too. For kid
   endpoints, set `kidMemberId` and `kidPin`, then send "Exchange a kid PIN";
   it saves `kidToken` for you. Every request checks its documented status code.
-- **After any API change:** run `pnpm -F api openapi:generate` and commit both.
+- **After any API change:** run `pnpm openapi:generate` in family-hub-api and commit both there.
   CI's `openapi:check` fails if either is stale or an endpoint lacks full docs.

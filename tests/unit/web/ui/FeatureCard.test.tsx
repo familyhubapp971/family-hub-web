@@ -2,7 +2,7 @@
 // h1 then h3 with nothing in between (WCAG 1.3.1). The level is now a prop.
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { FeatureCard } from '../../../../packages/ui/src/FeatureCard';
+import { FeatureCard } from '../../../../design-system/src/FeatureCard';
 
 const base = {
   icon: <span data-testid="icon" />,

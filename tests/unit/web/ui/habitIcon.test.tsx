@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { habitIcon, HABIT_ICON_NAMES } from '../../../../packages/ui/src/habitIcon';
+import { habitIcon, HABIT_ICON_NAMES } from '../../../../design-system/src/habitIcon';
 
 // FHS-631: a habit's icon is stored as a NAME ("heart", "star"), never an emoji
 // and never a component. Anything that renders the stored value directly prints

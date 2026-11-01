@@ -12,11 +12,11 @@ Magic Patterns design. Don't restyle ad-hoc; extend the source.
 
 ## Single source
 
-| Layer                                                                | Lives in                                                                         | Rule                                                                                                                                                                       |
-| -------------------------------------------------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Design tokens** (colours, shadows, fonts, breakpoints, animations) | [`packages/ui/tailwind.preset.js`](../../packages/ui/tailwind.preset.js)         | Apps `presets: [preset]`. **Never copy tokens into an app config**: extend the preset. Guarded by [tailwind-preset.test.ts](../../tests/unit/web/tailwind-preset.test.ts). |
-| **Global CSS + fonts**                                               | [`packages/ui/src/styles/globals.css`](../../packages/ui/src/styles/globals.css) | Imports Fredoka One + Nunito (Google Fonts) and sets the kingdom body bg. Apps `@import '@familyhub/ui/styles/globals.css'`.                                               |
-| **Components**                                                       | `packages/ui/src/*`                                                              | Use these. When porting a Magic Patterns component, port it **into `packages/ui` first**, then consume it from the page. Don't re-implement per screen.                    |
+| Layer                                                                | Lives in                                                                             | Rule                                                                                                                                                                       |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Design tokens** (colours, shadows, fonts, breakpoints, animations) | [`design-system/tailwind.preset.js`](../../design-system/tailwind.preset.js)         | Apps `presets: [preset]`. **Never copy tokens into an app config**: extend the preset. Guarded by [tailwind-preset.test.ts](../../tests/unit/web/tailwind-preset.test.ts). |
+| **Global CSS + fonts**                                               | [`design-system/src/styles/globals.css`](../../design-system/src/styles/globals.css) | Imports Fredoka One + Nunito (Google Fonts) and sets the kingdom body bg. Apps `@import '@familyhub/ui/styles/globals.css'`.                                               |
+| **Components**                                                       | `design-system/src/*`                                                                | Use these. When porting a Magic Patterns component, port it **into `design-system` first**, then consume it from the page. Don't re-implement per screen.                  |
 
 ## Tokens (mirror of the Magic Patterns design)
 
@@ -53,8 +53,8 @@ pnpm build-storybook    # what CI compiles; output is gitignored
 
 | Thing          | Where                                                                                            |
 | -------------- | ------------------------------------------------------------------------------------------------ |
-| Config         | [`packages/ui/.storybook/`](../../packages/ui/.storybook/)                                       |
-| Stories        | Beside the component: `packages/ui/src/<Name>.stories.tsx`                                       |
+| Config         | [`design-system/.storybook/`](../../design-system/.storybook/)                                   |
+| Stories        | Beside the component: `design-system/src/<Name>.stories.tsx`                                     |
 | Coverage guard | [`tests/unit/web/ui/stories-coverage.test.ts`](../../tests/unit/web/ui/stories-coverage.test.ts) |
 
 **A new component ships with a story.** The guard test fails the build otherwise,
@@ -69,18 +69,18 @@ Three things about the setup are deliberate:
 - **The canvas is kingdom purple by default.** These components are drawn for a
   purple page, so a white canvas would make correct components look broken.
   White and the deeper purple are both available from the backgrounds toolbar.
-- **Storybook serves `apps/web/public`** via `staticDirs`. The brand fonts are
+- **Storybook serves `public`** via `staticDirs`. The brand fonts are
   self-hosted (FHS-566), so without it every heading in the catalogue would fall
   back to a system face and misrepresent the design.
 
-Stories are typechecked, but by `packages/ui/tsconfig.stories.json` rather than
+Stories are typechecked, but by `design-system/tsconfig.stories.json` rather than
 the main config: they are not part of the package's public surface, so they stay
 out of the declaration build.
 
 **Not yet done:** 23 of the 36 components are still uncovered, all composites
 that need providers or fixture data. Restructuring the package into Atomic
 Design layers (atoms / molecules / organisms) was considered and deferred; every
-consumer imports through the barrel `packages/ui/src/index.ts` with no deep
+consumer imports through the barrel `design-system/src/index.ts` with no deep
 imports, so that regrouping stays a cheap file move whenever it is wanted.
 
 ## Deliberate divergences from the MP component prototypes
@@ -108,6 +108,6 @@ variant; TopNav tab-row `hide-scrollbar`.
 
 1. Need a token? It's in the preset, use the class. Missing? Add it to the
    preset (+ a preset-test assertion), never to an app config.
-2. Need a UI element used on 2+ screens? It belongs in `packages/ui`.
+2. Need a UI element used on 2+ screens? It belongs in `design-system`.
 3. Matching a Magic Patterns screen? Read the mock via the magic-patterns MCP,
-   port the component into `packages/ui`, then consume it.
+   port the component into `design-system`, then consume it.

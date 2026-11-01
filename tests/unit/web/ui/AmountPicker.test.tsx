@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { AmountPicker } from '../../../../packages/ui/src';
+import { AmountPicker } from '../../../../design-system/src';
 
 // FHS-512: AmountPicker is the money-critical ± stepper on the "Pocket
 // money" settings screen. Every assertion works in INTEGER MINOR UNITS

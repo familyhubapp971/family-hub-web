@@ -3,7 +3,7 @@ import type { Page } from '@playwright/test';
 /**
  * FHS-645: the child's own way in, at /t/:slug/kid-login: pick your face,
  * type four digits. No grown-up session is injected for these specs; the PIN
- * screen IS the thing under test (apps/web/src/pages/auth/KidSignIn.tsx).
+ * screen IS the thing under test (src/public-pages/sign-in/KidSignIn.tsx).
  */
 export class KidSignInPO {
   constructor(private readonly page: Page) {}

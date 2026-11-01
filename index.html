@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext x='0' y='52' font-size='56'%3E%F0%9F%8F%A0%3C/text%3E%3C/svg%3E"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Family Hub</title>
+    <!--
+      Content Security Policy (FHS-170). Meta tag is the Sprint-0 path
+      because vite preview doesn't emit response headers. Production
+      should ALSO set this as a real Content-Security-Policy response
+      header at the edge (Caddy/nginx/Railway Edge): meta covers
+      script-src/style-src/img-src/connect-src/etc but cannot set
+      frame-ancestors (header-only). FHS-202 / Railway prod provisioning
+      owns the response-header path. style-src includes 'unsafe-inline'
+      because Tailwind JIT inserts <style> tags; revisit when CSS shape
+      stabilises.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://flagcdn.com https://*.tile.openstreetmap.org https://upload.wikimedia.org https://*.wikimedia.org; connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* https://*.ingest.sentry.io https://api.stripe.com https://*.supabase.co wss://*.supabase.co https://*.up.railway.app https://en.wikipedia.org; frame-src https://js.stripe.com https://hooks.stripe.com; object-src 'none'; base-uri 'self'; form-action 'self' https://accounts.google.com https://*.supabase.co"
+    />
+    <!-- Self-hosted brand fonts (FHS-566): preloaded so the rounded
+         lettering is present at first paint, with no third-party fetch
+         and no reflow. Declared in @familyhub/ui/styles/globals.css. -->
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      href="/fonts/fredoka-one-latin.woff2"
+      crossorigin
+    />
+    <link rel="preload" as="font" type="font/woff2" href="/fonts/nunito-latin.woff2" crossorigin />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/app/main.tsx"></script>
+  </body>
+</html>

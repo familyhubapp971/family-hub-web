@@ -29,7 +29,7 @@ feature on its own is not an answer.
 ## Screens covered
 
 The screen names, features and examples live in
-`apps/web/src/lib/screen-feedback.ts`. The covered screens are:
+`src/app/lib/screen-feedback.ts`. The covered screens are:
 
 - **Dashboard tabs:** Family Dashboard, Calendar, Weekly Meals, Assignments, Noticeboard, My Tasks.
 - **Account pages:** Manage family, Kids money, Family settings, Reward settings.

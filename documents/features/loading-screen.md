@@ -50,8 +50,8 @@ as a broken page rather than a wait.
 
 - **Given** a full-screen wait anywhere in the app
 - **When** it renders
-- **Then** it uses `apps/web/src/components/LoadingScreen.tsx`
-- **And** small in-panel waits use the shared `Spinner` from `packages/ui` rather than their own `animate-spin`
+- **Then** it uses `src/app/components/LoadingScreen.tsx`
+- **And** small in-panel waits use the shared `Spinner` from `design-system` rather than their own `animate-spin`
 
 ### Story 3: Usable on any device, with or without motion
 
@@ -91,12 +91,12 @@ as a broken page rather than a wait.
 
 ## Deliberate deviations from the Magic Patterns design
 
-| Deviation                                                                                      | Why                                                                                                                                                  |
-| ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Kept the timeout inside `LoadingScreen` rather than MP's separate `LoadingWithTimeout` wrapper | The repo already had the 15s stall and an `error` prop that callers pass; adopting the wrapper meant rewriting every caller for no user-visible gain |
-| Kept the rotating reassurance copy MP dropped                                                  | A line frozen for 15 seconds reads as a hang; it rotates only when motion is allowed                                                                 |
-| Kept `role="main"` and the brand link                                                          | The loader stays a landmark and keeps a way out                                                                                                      |
-| `LoadingScreen` lives in `apps/web`, not `packages/ui`                                         | It uses the router for the brand link and "Back to sign in"; `packages/ui` has no router dependency. The inline `Spinner` did go into `packages/ui`  |
+| Deviation                                                                                      | Why                                                                                                                                                     |
+| ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Kept the timeout inside `LoadingScreen` rather than MP's separate `LoadingWithTimeout` wrapper | The repo already had the 15s stall and an `error` prop that callers pass; adopting the wrapper meant rewriting every caller for no user-visible gain    |
+| Kept the rotating reassurance copy MP dropped                                                  | A line frozen for 15 seconds reads as a hang; it rotates only when motion is allowed                                                                    |
+| Kept `role="main"` and the brand link                                                          | The loader stays a landmark and keeps a way out                                                                                                         |
+| `LoadingScreen` lives in `src/`, not `design-system`                                           | It uses the router for the brand link and "Back to sign in"; `design-system` has no router dependency. The inline `Spinner` did go into `design-system` |
 
 ## Out of scope
 

@@ -6,10 +6,10 @@ import { resolve } from 'node:path';
 import { describe, it, expect } from 'vitest';
 
 // The ui package's tests run in a browser-like setup, so find the stylesheet
-// by path from wherever vitest was started (repo root or packages/ui).
+// by path from wherever vitest was started (repo root or design-system).
 const css = readFileSync(
   [
-    resolve(process.cwd(), 'packages/ui/src/styles/globals.css'),
+    resolve(process.cwd(), 'design-system/src/styles/globals.css'),
     resolve(process.cwd(), 'src/styles/globals.css'),
   ].find((p) => existsSync(p))!,
   'utf8',

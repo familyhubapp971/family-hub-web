@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { Toggle, BoostButton, ChoiceRow, ResultBanner } from '../../../../packages/ui/src';
+import { Toggle, BoostButton, ChoiceRow, ResultBanner } from '../../../../design-system/src';
 
 // FHS-512: the small reusable pieces the "Pocket money" settings screen is
 // built from (grouped in one file since each is a tiny primitive).

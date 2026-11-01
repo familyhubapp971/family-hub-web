@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { useState } from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { Dialog } from '../../../../packages/ui/src';
+import { Dialog } from '../../../../design-system/src';
 
 // FHS-623: the accessible dialog shell every money-action sheet (and every
 // other Dialog/ConfirmDialog consumer) is built on. Covers the a11y floor

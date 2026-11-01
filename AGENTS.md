@@ -1,0 +1,1367 @@
+# Family Hub: Agent Instructions
+
+The project rules for every coding agent in this repo (Claude Code, Codex
+and others). [CLAUDE.md](CLAUDE.md) imports this file and adds only Claude
+Code setup (skills, helper agents, slash commands). **Change project rules
+here, not in CLAUDE.md**, so there is one copy and nothing drifts.
+
+---
+
+## Project context
+
+**Family Hub** is a multi-tenant SaaS platform for families to coordinate
+schedules, tasks, and shared life. See [README.md](README.md) for the public
+overview.
+
+**Stack:** Hono + Drizzle + Zod (API) · React + Vite + Tailwind (web) ·
+Postgres with RLS (data) · Vitest + Playwright + k6 (testing) · Railway
+(hosting) · our own GoTrue on Railway (sign-in, [ADR 0022](documents/decisions/0022-own-sign-in-server.md); production on Supabase until FHS-701) · Resend (email).
+
+**Repo layout:** this repo holds the web site (`src/`: screens by product area in
+`src/areas/`, public pages in `src/public-pages/`, routing and shared
+layout in `src/app/`; plus `index.html`, `public/` and the Vite config at
+the root) and the design system (`design-system/`), next to `documents/`,
+`scripts/` and `tests/` (`unit/` and `e2e/`). It is one of three repos per
+[ADR 0021](documents/decisions/0021-three-repo-split.md)
+([FHS-686](https://qualicion2.atlassian.net/browse/FHS-686)):
+`family-hub-api` (server), `family-hub-web` (this repo, renamed from
+`family-hub-app`) and `family-hub-app` (the phone app, not created yet).
+
+> **Server changes go to `family-hub-api` only.** The server, the shared
+> rules, the endpoint list (OpenAPI), the server tests (unit, integration,
+> performance) and the database live in
+> [`family-hub-api`](https://github.com/familyhubapp971/family-hub-api).
+> This repo installs the shared rules from it by version label. A ticket
+> that needs both server and screen changes opens one PR in each repo.
+
+**Branches:** `main` (production) · `staging` (pre-prod) · feature → PR into
+`staging` → promoted to `main`. Both protected: 1 approval, conversation
+resolution required, no force pushes.
+
+**Jira project:** FHS (`https://qualicion2.atlassian.net/browse/FHS-...`).
+Reference the ticket key in commit messages and PR titles.
+
+---
+
+## Talk to me in plain English (always)
+
+The founder is **not an engineer**. Top rule in this file. Plain words,
+crisp sentences, real names ("the Today screen") not file paths, max 5
+bullets per group. Tech word unavoidable? Explain it in a few plain
+words right after.
+
+**Every reply that hands control back uses an icon summary table, then
+three separate icon-headed bullet lists.** Founder choice (2026-10-31),
+replacing the two-table layout from 2026-08-06. The icon on each block
+makes it easy to spot at a glance. Keep the icons and labels word for
+word.
+
+**A bold title line** saying the outcome in plain words.
+
+| 📋 Summary               | What happened        |
+| ------------------------ | -------------------- |
+| _short label, 1–3 words_ | _one plain sentence_ |
+
+**✅ What I did**
+
+- _one finished action_
+
+**👉 What you need to do**
+
+- _one action for the founder, or "Nothing for now."_
+
+**⏭️ What's next**
+
+- _one piece of upcoming work_
+
+- Summary table: 1–5 rows. The label is the thing ("Jira", "Deploy"),
+  the second column is the plain sentence.
+- The three lists: 1–3 bullets each, one sentence per bullet. Drop
+  "What's next" only when there is genuinely nothing next.
+- Then one clear question with the choices spelled out (e.g.
+  **start next ticket / pause**) if you need an answer.
+
+Rules that still apply:
+
+- One sentence per cell or bullet. If it needs two, it is doing too much.
+- No nested bullets, no code blocks, no `***` inside a cell.
+- Plain words. A `path/to/file.ts:LINE` reference is fine; a wall of
+  jargon is not.
+- Keep the whole reply under ~150 words.
+- Ordinary prose answers to a direct question do not need this layout:
+  use it whenever the reply hands control back to the founder.
+
+**Put real space between every part** (founder rule, 2026-10-31). Text
+right under a table is hard to tell apart from the next block. Put a
+line holding only `&nbsp;`, with a blank line above and below it, in
+each of these places:
+
+- between the title line and the summary table,
+- between the summary table and each list, and between the lists,
+- before and after any note,
+- before the closing question.
+
+Plain blank lines collapse, so they do not count. Never use a `---`
+divider line for this: the founder wants space, not a line.
+
+---
+
+## Product decisions go through the product-manager agent
+
+**Founder rule (2026-08-08): product decisions and ticket stories go through
+the product-manager agent.** Its brief is
+[`.claude/agents/product-manager.md`](.claude/agents/product-manager.md).
+Run it as a helper agent if your tool supports one; otherwise follow that
+brief yourself. Use it whenever you are:
+
+- **making or suggesting a product decision**: what to build, what to cut,
+  what to prioritise, how a feature should behave, pricing, positioning.
+- **writing the user story and acceptance criteria in a Jira ticket.**
+
+Brief it with the founder's ticket format: the bold one-line ask, **Why**, the
+**What to cover** table, **Depends on**, then Gherkin acceptance criteria,
+plain words, **under 250 words** (see
+[Ticket bodies](#ticket-bodies-written-so-anyone-gets-it-in-ten-seconds)).
+Read its output, decide yourself, then write the ticket. **Never hand the agent
+the final call**: it drafts, you decide.
+
+Skip it only for a ticket with no product surface at all (a board tidy-up, a CI
+tweak), and say so when you skip it.
+
+---
+
+## Repo conventions
+
+### Commits
+
+- Conventional Commits: `feat:`, `fix:`, `chore:`, `docs:`, `test:`, `refactor:`, `perf:`.
+- Reference the Jira key in the body or footer (e.g., `FHS-149`).
+- Local repo identity is `toonday-fh <familyhubapp971@gmail.com>`, do not
+  alter unless explicitly asked.
+
+**Keep messages short and plain.** One-line subject under 70 chars. Body
+is optional: add only when the _why_ isn't obvious from the diff or the
+ticket. When a body is needed, max ~5 lines, plain language, no marketing
+voice. Don't recap the diff (the diff already shows it). Don't list every
+sub-decision and every nit you fixed; those live in the PR body or the
+Jira ticket. **Goal: a future reader scanning `git log --oneline` learns
+what changed; clicking through tells them why.**
+
+Anti-pattern: 30-line commit messages with bulleted "What ships",
+self-review notes, and follow-up trackers. That belongs in the PR body
+or Jira comment, not the commit.
+
+### Pull requests
+
+- Target `staging` (not `main`) for feature work.
+- **One PR per ticket. Finish one ticket completely before starting the
+  next.** No parallel branches, no half-built features sitting in
+  flight. A ticket is "complete" only when:
+  - all relevant tests are written and green at every applicable tier
+    (unit / integration / e2e, see "Test coverage per ticket" below),
+  - PR opened, self-reviewed, CI green, merged to `staging`,
+  - Jira ticket transitioned to Done with a structured close comment,
+  - Confluence Epics & Tickets page refreshed.
+    Only then branch for the next ticket. The single exception:
+    reviewer-blocking polish pings on a still-open PR (those continue
+    on the same branch, not a new one).
+- **Merge style (conditional, per [ADR 0006](documents/decisions/0006-branching-strategy.md)):**
+  - **Solo / 1 active contributor (current):** squash-merge feature → staging; merge-commit `staging → main`.
+  - **≥2 active contributors:** switch to `--no-ff` merge commits at every level. Trigger: second person opens their first PR.
+- Use the [PR template](.github/pull_request_template.md): it enforces
+  the Jira link, Gherkin acceptance check, and rollout notes.
+- **Self-review every PR before opening it.** Run the `code-reviewer`
+  subagent ([`.claude/agents/code-reviewer.md`](.claude/agents/code-reviewer.md))
+  on the branch's diff with the ticket context; action every blocking
+  finding in the same branch; mention the review in the PR body
+  (e.g., _"Self-reviewed via code-reviewer subagent; findings addressed
+  in commit abc1234"_). Defer non-blocking findings to a "Follow-ups"
+  section so the human reviewer can see what was punted on purpose.
+  See the [`requesting-code-review`](.claude/skills/requesting-code-review/SKILL.md)
+  skill for the workflow.
+- **Always dispatch the `qa-expert` subagent in parallel with
+  `code-reviewer`** for any ticket that ships user-facing flows, API
+  endpoints, schema changes, or auth/multi-tenancy behaviour.
+  `code-reviewer` checks the _code_; `qa-expert` enumerates the
+  **flows + edge cases + missing-test scenarios** a real user could
+  hit (race conditions, error paths, empty states, partial failures,
+  unauthorized access, cross-tenant leakage, mobile/tablet/desktop
+  responsive behaviour, accessibility hits, browser back-button,
+  expired sessions, double-clicks, network drops, etc.). The two
+  agents run **at the same time** (in parallel, if your tool supports
+  it). Action every
+  blocking finding from both before opening the PR; mention both in
+  the Self-review section: _"Self-reviewed via code-reviewer +
+  qa-expert subagents; X+Y findings actioned"_. Skip the qa-expert
+  pass only on pure-internal changes (build config, test infra,
+  CI tweaks, docstring-only edits) and say so explicitly in the
+  PR body.
+
+**Keep PR bodies short.** Default sections are: **Summary** (1-3 lines),
+**AC trace** (one line per AC, pass/fail), and **Self-review** (one
+sentence + count of blockers actioned). Add anything else only when it
+genuinely changes how a reviewer evaluates the PR.
+
+**Do NOT include a "Test plan" section.** Verification commands ran
+locally and CI status are not artefacts the reviewer needs to read:
+CI either passes (visible on the PR) or it doesn't. If a manual
+verification step is essential to assess the change (e.g. a UI flow a
+reviewer should click through), put it in a one-line note under
+Summary. Otherwise skip it.
+
+**Don't bloat with**: "What ships" exhaustive bullets duplicating the
+diff, "Decisions worth flagging" boilerplate, "Deferred follow-ups"
+when there are none, marketing-voice section headings. The diff and
+the ticket already say most of this.
+
+> **Production is live (founder decision, 2026-10-31, FHS-200).** Real
+> users are on it. Feature work still lands on `staging`. Production on
+> Railway builds from `main`, so merging to `main` deploys to real users:
+> promote with a `staging` → `main` merge-commit PR only when the founder
+> asks. Back up the production database and check its row counts before
+> any production change (see
+> [deployment.md](documents/technical/deployment.md#production-switch-2026-10-31)).
+
+### Ticket bodies: written so anyone gets it in ten seconds
+
+**Founder rule (2026-08-06).** A ticket is read by a tired person on a
+phone who was not in the conversation that created it. Write for them.
+
+> **Founder rule (2026-08-08): keep them SHORT.** The tickets written up to
+> now are far too long. Same shape and headings as below, but **plain words a
+> non-engineer reads once and gets**, and a hard size limit:
+>
+> | Part                    | Limit                                                    |
+> | ----------------------- | -------------------------------------------------------- |
+> | The bold first line     | One sentence. What we are doing, and for whom            |
+> | **Why**                 | 1 to 3 bullets, one line each                            |
+> | **What to cover**       | Table, 3 to 6 rows, one short sentence per cell          |
+> | **Depends on**          | One line, or "Nothing"                                   |
+> | **Acceptance criteria** | 2 to 4 scenarios, 3 to 5 lines each                      |
+> | Whole ticket            | **Under 250 words.** If it needs more, it is two tickets |
+>
+> Cut anything a reader does not need to start work: background essays,
+> paragraphs of reasoning, every alternative considered, long quoted code.
+> Those belong in the PR body or a comment. **No jargon the founder did not
+> use.** If a technical word is unavoidable, define it in five words the first
+> time. A ticket nobody finishes reading is a ticket nobody acts on.
+
+**Every ticket body uses this shape, in this order:**
+
+```markdown
+**<One plain sentence: what we are doing and for whom.>**
+
+### Why
+
+- <One or two bullets. What is wrong today, or what this unlocks.>
+
+### What to cover
+
+| Thing  | What it needs          |
+| ------ | ---------------------- |
+| <area> | <what good looks like> |
+
+### Depends on
+
+- <Design, ticket or decision this waits on. Say "nothing" if free to start.>
+
+### Acceptance criteria
+
+**Scenario: <plain name>**
+
+- **Given** ...
+- **When** ...
+- **Then** ...
+```
+
+Rules for it:
+
+- **Bullets and tables, never paragraphs.** If a sentence runs past ~20
+  words, split it. A wall of prose is the thing this rule exists to stop.
+- **Use a table whenever the ticket lists 3+ things to cover.** Two
+  columns: the thing, and what it needs. Tables beat comma-spliced
+  sentences for scanning.
+- **Simple language.** No jargon the reader did not put there. Say "the
+  menu on a phone", not "the mobile nav affordance". If a technical term
+  is unavoidable, define it in five words the first time.
+- **Lead with the ask.** The bold first line says what we are doing. The
+  reader should not need the Why section to know what the work is.
+- **Name real things.** Real screens, real file paths, real ticket keys.
+  Not "the relevant component".
+- **Low cognitive load is the goal.** One idea per bullet, one row per
+  thing, no nested bullets, no ticket that needs re-reading.
+- Acceptance criteria stay Gherkin (see the AC rule below); the sections
+  above them are what changed.
+
+**Not every ticket needs acceptance criteria.** Founder rule (2026-08-07):
+Gherkin AC exist to say what "working" looks like in the product. A ticket
+with no product surface has nothing to write them about, and inventing
+them is noise a tired reader has to wade through.
+
+| Ticket is about                                                                 | Gherkin AC   |
+| ------------------------------------------------------------------------------- | ------------ |
+| A feature, a bug, a design port, anything that changes what a user sees or does | **Required** |
+| Anything technical: schema, API, tests, CI, infrastructure, performance         | **Required** |
+| Admin and process: board tidy-ups, ticket re-scoping, sprint setup, labels      | Skip         |
+| Writing and planning: documents, decks, applications, research, comms           | Skip         |
+
+When you skip them, the ticket still carries the bold one-line ask, the
+**Why**, and the **What to cover** table, so it is still obvious what
+"finished" means. Example of a ticket that rightly has none:
+[FHS-589](https://qualicion2.atlassian.net/browse/FHS-589), which only
+re-grouped epics on a wiki page.
+
+Good example to copy: [FHS-499](https://qualicion2.atlassian.net/browse/FHS-499).
+
+This applies when creating a ticket AND when picking one up: if you open
+a ticket written as a wall of prose, rewrite it in this shape before you
+start work.
+
+### Ticket fields: set on EVERY ticket (all types)
+
+**Rule:** Whenever you create or pick up **any** Jira ticket (Story, Task,
+Bug, Epic, Sub-task), these three fields must be set. Don't leave them
+blank and don't wait to be asked.
+
+1. **Story point estimate** (`customfield_10016`, a number): always
+   estimate, even Bugs and chores. Use Fibonacci: `1` trivial · `2`
+   small · `3` normal · `5` chunky · `8` large multi-surface · `13`
+   epic-sized (split it). Epics: set the rolled-up total or leave the
+   children to carry it, but the stories/tasks/bugs always get a number.
+2. **Team** (`customfield_10001`): always **Family Hub SaaS** (team id
+   `b6dcc0ad-3de2-44eb-802b-2804ad35ef3c`). New tickets usually inherit
+   it; if a ticket shows Team = None, set it.
+3. **Labels** (`labels`, array): at least one **area** label plus the
+   touched **surface(s)**. Areas: `childworld`, `myworld`, `learn`,
+   `meals`, `calendar`, `members`, `auth`, `billing`, `admin`,
+   `tenancy`, `infra`. Surfaces: `frontend`, `backend`, `data`,
+   `tests`, `docs`. Bugs also carry `bug`; manual-test tasks carry
+   `manual-test`, `qa`, `sprint-N-close` (per the demo-testing rule).
+
+Set these alongside the existing required fields (parent epic, Sprint,
+Fix Version per the rules below). Quick backfill pattern (`PUT` the
+issue):
+
+```bash
+curl -s -u "$EMAIL:$JIRA_API_TOKEN" -X PUT \
+  "$URL/rest/api/3/issue/FHS-XXX" -H "Content-Type: application/json" \
+  -d '{"fields":{"customfield_10016":5,"labels":["childworld","frontend"]}}'
+```
+
+### Branch & PR naming (Jira auto-link)
+
+**Rule:** Every Jira ticket gets its own feature branch. **Never commit
+directly to `staging` or `main`**: always branch first, even for
+single-file changes.
+
+The Jira ↔ GitHub integration links commits, branches, and PRs to FHS
+tickets when the ticket key appears in the name. Use:
+
+- **Branch:** `<type>/FHS-XXX-short-slug`: short and identifiable, 2–4
+  kebab-case words. Examples:
+  - `feat/FHS-149-stack-scaffold`
+  - `fix/FHS-12-tenant-ctx-async`
+  - `documents/FHS-146-claude-md-rules`
+- **PR title:** `<type>(FHS-XXX): short summary`, e.g.,
+  `feat(FHS-149): scaffold Hono API with /health and /hello`
+- **PR target:** `staging` (not `main`) for feature work.
+- **Commit footer:** include `Refs FHS-XXX` or `Closes FHS-XXX` to drive
+  Jira workflow transitions (configured per-project).
+
+Types follow Conventional Commits: `feat`, `fix`, `chore`, `docs`, `test`,
+`refactor`, `perf`.
+
+**First action when starting a ticket:**
+
+```bash
+git checkout staging && git pull   # feature work always branches from staging
+git checkout -b <type>/FHS-XXX-short-slug
+git push -u origin <type>/FHS-XXX-short-slug   # publish so the Jira rule fires
+```
+
+> **Trigger rule:** creating and **pushing** the feature branch is the
+> signal that work has started. The Jira Automation rule **"Branch
+> created → In Progress"** (configured in
+> `https://qualicion2.atlassian.net/jira/software/projects/FHS/settings/automation`)
+> auto-transitions the matching FHS-XXX ticket from To Do → In Progress
+> when the branch is pushed. No manual API call needed.
+>
+> **Manual fallback**: if the automation rule is disabled or fails,
+> transition manually:
+>
+> ```bash
+> curl -s -u "$EMAIL:$JIRA_API_TOKEN" -X POST \
+>   "$URL/rest/api/3/issue/FHS-XXX/transitions" \
+>   -H "Content-Type: application/json" \
+>   -d '{"transition":{"id":"21"}}'   # 21 = In Progress for FHS
+> ```
+
+### Closing tickets (post-merge)
+
+**Rule:** As soon as the implementation PR for a ticket merges into the
+target branch (`staging` during the bootstrap phase; `main` afterwards),
+the ticket must be commented and closed, automatically, without the
+user asking.
+
+Steps:
+
+1. Verify the merge landed on `main` (and `staging` is in sync if a
+   promotion PR was used).
+2. Post a **brief, structured** comment on the Jira ticket using ADF
+   `bulletList` / `heading` blocks. Never dense prose. 4–8 bullets is
+   the target: cover what was delivered, the PR number(s), any
+   caveats / follow-ups, and the next ticket if known.
+3. Transition the ticket to **Done** (transition ID `31` for FHS;
+   confirm via `GET /rest/api/3/issue/<KEY>/transitions` if unsure).
+4. If the work has caveats / partial completion, still close, but list
+   the caveats under a "Caveats" or "Follow-ups" section in the comment.
+
+The closing comment is part of the deliverable, not a separate task.
+Drift between merged code and ticket status is a process bug.
+
+After the transition, **refresh the Confluence "FHS: Epics & Tickets"
+page** (ID `3079340034` in space `FA`) so its Progress column stays
+in sync with Jira:
+
+```bash
+set -a; source .env.local; set +a
+python3 scripts/jira/refresh-confluence-epics-page.py --reason "FHS-XXX close"
+```
+
+The script ([`scripts/jira/refresh-confluence-epics-page.py`](scripts/jira/refresh-confluence-epics-page.py))
+fetches every epic + its children from Jira, groups by Fix Version,
+renders a storage-format body with status lozenges and per-epic
+progress (done/total), and PUTs version+1 to the page. Standard
+library only.
+
+If multiple tickets close in quick succession (child close that
+cascades to an epic close), refresh **once at the end**, not per
+transition.
+
+### Document design: low cognitive load (every doc, every time)
+
+Founder rule (2026-08-04): every document produced in this repo
+(briefs, demo decks, strategy PDFs, one-pagers) is built for a reader
+on the move. Non-negotiables when building or editing ANY doc:
+
+- One idea per element: short bullets over paragraphs, labeled
+  micro-sections over run-on prose, tables for enumerable facts.
+- Air is a feature: generous padding between sections, rows and
+  tables. Never squash content to force a page count; add a page
+  instead.
+- Visible hierarchy, deck design language: lavender paper `#F6F1FA`,
+  deep-purple `#3d1065` hero panels with white type, candy pill
+  palette, black borders, hard offset shadows, Fredoka One + Nunito.
+- Body text never below ~9.5pt in the rendered PDF; wide layouts go
+  landscape or split across pages rather than shrinking type.
+- No element may split across a page break; flowing docs render with
+  real top/bottom page margins.
+- Verify like a founder: rasterize every page of the rendered PDF and
+  look at it before shipping. If a page reads as a wall of text,
+  restructure it; don't ship and wait to be told.
+- Render business docs with `node scripts/docs/render-docs.mjs` (all
+  doc-src sources, correct orientation, margins and running footers);
+  the demo deck renders with `node scripts/docs/render-demo-pdf.mjs`.
+
+### Demo doc follows every user-visible merge
+
+**Whenever a merged ticket changes what a user can see or do**, refresh
+the shipped-state demo doc in the same session, not just at sprint
+close. Founder request (FHS-552, 2026-08-03): the demo page is the
+founder's single view of the live product and must never lag reality.
+
+- Edit the source `scripts/docs/demo-src/whats-shipped.src.html`: add/update
+  the capability card in the matching section (plain words, persona
+  chips, FHS key chip), bump the "Last updated" stamp and the "current
+  through FHS-XXX" marker in the hero.
+- Render the committed artefact with `node scripts/docs/render-demo-pdf.mjs`
+  → [`documents/demo/whats-shipped.pdf`](documents/demo/whats-shipped.pdf).
+  **Docs folders are PDF-only** (no .html artefacts in `documents/`).
+  `documents/demo/` is committed, so commit source + PDF together there.
+- Keep it visual and in the design language (kingdom purple, Fredoka
+  One + Nunito, black borders, offset shadows), it's a demo prop, not
+  a changelog.
+- Internal-only merges (CI, tests, refactors, docs) skip this; if
+  skipped on a user-visible ticket, say why in the close comment.
+- **The QA feature-tour brief follows the same rule.** When shipped
+  features change, update
+  `scripts/docs/doc-src/fh-qa-brief-feature-tour.html` and
+  re-render it in the same session, so external testers always hold a
+  current map of the product.
+
+> **`documents/business/`, `documents/commercial/`, `documents/impact/`,
+> `documents/investments/` and `documents/qa/` are gitignored** (founder
+> request, 2026-08-06; commercial added 2026-10-09). Only their
+> HTML sources in `scripts/docs/doc-src/` are tracked. Edit the source, run
+> `node scripts/docs/render-docs.mjs`, and the PDF lands locally for the
+> founder to share: do not try to commit it, and do not treat its absence
+> from a diff as work left undone. `documents/demo/` is the committed
+> exception.
+
+### Epic status follows its children
+
+An epic's status always says what is actually happening underneath it.
+The rule, in order:
+
+| Children                          | Epic                           |
+| --------------------------------- | ------------------------------ |
+| Any child In Progress             | In Progress                    |
+| All children Done or Won't Do     | Done                           |
+| All children To Do                | To Do                          |
+| Mixed To Do and Done, none moving | In Progress (work has started) |
+
+An epic with no children is left alone.
+
+**A closed epic reopens when new work lands under it** (founder rule,
+2026-08-06). This replaces the old "once Done it stays Done" carve-out:
+if a bug or a new ticket is filed against a shipped epic, the epic goes
+back to In Progress, because it is no longer finished. It closes again on
+its own when that child closes.
+
+**Do not hand-transition epics.** Run the script, which applies the table
+above across the whole project:
+
+```bash
+set -a; source .env.local; set +a
+python3 scripts/jira/sync-epic-status.py            # report only
+python3 scripts/jira/sync-epic-status.py --apply    # actually transition
+python3 scripts/jira/sync-epic-status.py --apply --epic FHS-178
+```
+
+Run it after closing any ticket, alongside the Confluence refresh. It is
+standard library only and safe to run repeatedly: it transitions only the
+epics that are out of step.
+
+### Fix Versions: Sprint cluster releases
+
+The FHS project uses **Fix Versions** to mark Sprint cluster releases,
+mapped 1-to-1 to the Sprint-to-milestone table in
+[`documents/strategy/saas-transformation.md`](documents/strategy/saas-transformation.md):
+
+| Version                  | Sprint cluster                |
+| ------------------------ | ----------------------------- |
+| `0.0-bootstrap`          | Sprint 0: Bootstrap (current) |
+| `0.1-tenant-foundation`  | Sprint 1                      |
+| `0.2-signup-custom-url`  | Sprint 2                      |
+| `0.3-modules-gating`     | Sprint 3                      |
+| `0.4-stripe-billing`     | Sprint 4                      |
+| `0.5-invites-roles`      | Sprint 5                      |
+| `1.0-white-label-launch` | Sprint 6 (GA)                 |
+
+Rules:
+
+- **Tag at branch-creation time** (alongside the auto-In-Progress
+  transition) so Sprint-cluster ownership is visible from day 1.
+- **Mark a Fix Version released** when the Sprint cluster's vertical
+  slice ships and is verified in production. For `0.0-bootstrap`, that's
+  when [FHS-198](https://qualicion2.atlassian.net/browse/FHS-198) closes
+  and the staging → main batch promotion lands per
+  [FHS-200](https://qualicion2.atlassian.net/browse/FHS-200).
+- **Auto-generate release notes** per version when it ships:
+  `project = FHS AND fixVersion = "<version>"` lists every ticket;
+  publish to a per-version Confluence page.
+- Post-launch we move to semver `1.0.x` / `1.1.x`.
+
+### End-of-sprint demo manual testing
+
+Every sprint close ships a founder-facing manual E2E test pass. The
+parent Jira epic
+[**FHS-254: End-of-sprint demo E2E manual testing**](https://qualicion2.atlassian.net/browse/FHS-254)
+collects one child Task per sprint (e.g. FHS-251 for Sprint 2). The
+child is the demo checklist: every user-visible flow shipped that
+sprint, ticked Pass / Fail / Blocked.
+
+**Trigger:** when a sprint's last code ticket closes (before
+transitioning the sprint complete in the board), create the child
+Task. Don't wait for the user to ask.
+
+**Steps (autonomous, no permission needed):**
+
+1. Create a new **Task** under FHS-254:
+   - Summary: `test: manual E2E test pass, Sprint N (<theme>) close`
+     (e.g. `test: manual E2E test pass, Sprint 3 (Modules & Gating) close`).
+   - Parent: FHS-254.
+   - Sprint: the closing sprint (e.g. 442 for Sprint 3).
+   - Fix Version: the closing sprint's cluster (e.g. `0.3-modules-gating`).
+   - Labels: `manual-test`, `qa`, `sprint-N-close`.
+2. Body is a **tabular checklist**, never prose. Structure:
+   - One section per epic shipped that sprint (e.g. Section A =
+     epic FHS-XXX).
+   - Within each section, a markdown table with columns:
+     `# | Step | Expected outcome | Result | Notes`.
+   - Rows numbered with a section letter (`A1`, `A2`, …).
+   - Plus a **Summary** table at the bottom with `Pass / Fail /
+Blocked` totals + counts of new bug docs filed.
+   - Plus a **Known bugs already filed** table linking
+     the Jira bug keys to the row numbers they affect.
+3. Append a "Children" bullet to FHS-254's description body (already
+   has the list, just append the new key).
+4. Tell the user the demo sheet is ready + link both the Jira ticket
+   and the local markdown path.
+
+**Definition of done (per child):**
+
+- Every row has Result + Notes.
+- Summary totals filled in.
+- A Jira Bug filed for every Fail.
+- Summary commented back on the child Task; transition to Done.
+- Demo doc (`documents/demo/whats-shipped.html`) refreshed if any
+  shipped flow needs revision based on what the test pass found.
+
+### Every reported bug gets logged: no exceptions
+
+> **The moment the founder reports a bug (a screenshot, "this is broken",
+> "X overlaps Y", "still misaligned", etc.), it MUST be logged as an FHS
+> Bug ticket immediately (before or alongside fixing it) so it can be
+> picked up and tracked. Never fix-and-forget without a ticket, and never
+> wait to be asked to file it.** This is automatic, like the
+> branch-creation and ticket-close rules.
+
+How to apply:
+
+- On a bug report, **first** create the FHS Bug (To Do, current sprint,
+  matching Fix Version, parent = the feature's epic, story points, plus
+  area and surface labels, a one-line layperson summary, three technical
+  bullets, and Gherkin AC) per the lifecycle below, even if you fix it in
+  the same session. If several bugs are reported in one message, log each.
+- If the bug is genuinely trivial and fixed in the same turn, still file
+  the ticket and close it on merge: the audit trail is the point.
+  The Jira ticket is the only record: there is no local bugs folder
+  (removed 2026-08-06), so nothing is tracked outside Jira.
+
+### Fixing bugs (workflow)
+
+When picking up any `Bug` Jira ticket, follow the same lifecycle as a feature ticket, but with a
+few bug-specific steps front-loaded so the manual-test sheet stays
+in sync. **Always do this before writing any fix code**:
+
+1. **Make sure the bug is in Jira.** Short plain-language title (no
+   `bug:` prefix), one-line layperson summary in bold, 3 short
+   technical bullets, 3 Gherkin acceptance criteria.
+2. **Sprint + Fix Version + Epic.** Add the bug to the current active
+   sprint and tag with the matching cluster Fix Version
+   (`0.0-bootstrap` etc.). **Set the bug's parent to the feature's
+   epic**: the epic that delivered the feature the bug lives in
+   (e.g. a My World bug → parent `FHS-290`). Every bug must hang off
+   its feature epic for traceability:
+
+   ```bash
+   curl -s -u "$EMAIL:$JIRA_API_TOKEN" -X PUT \
+     "$URL/rest/api/3/issue/FHS-XXX" -H "Content-Type: application/json" \
+     -d '{"fields":{"parent":{"key":"FHS-<epic>"}}}'   # 204 = linked
+   ```
+
+   If you can't identify the feature epic, ask before filing the bug:
+   don't leave it parentless. (A post-launch bug on an already-Done
+   epic does NOT reopen the epic: see "Epic status follows its
+   children".)
+
+3. **Link to the active manual-test child Task.** Use a Jira
+   "Blocks" link from FHS-251 (or the current sprint's child of
+   FHS-254) → the bug ticket. This keeps the manual checks ticket
+   honest about what still needs verifying.
+4. **Transition to In Progress.** The branch-creation Automation
+   covers this for new branches matching `<type>/FHS-XXX-…`, but
+   the bug-fix branch may use a slug-only name (`fix/<slug>`); when
+   the branch name doesn't carry the FHS key, transition manually
+   via the API (`POST /rest/api/3/issue/<KEY>/transitions` with
+   transition id `21`).
+5. **Branch.** `fix/FHS-XXX-short-slug` (so Jira auto-In-Progress
+   fires for free), or `fix/<descriptive-slug>` if step 4 was used.
+6. **Fix.** Smallest viable change; resist refactoring around it.
+7. **Add tests that lock the fix.** A unit test that fails on the
+   pre-fix code and passes on the fixed code is the floor.
+   Integration / E2E only when the bug touches multi-layer
+   behaviour. The test name should describe the bug, not the
+   implementation (e.g. `bar centres on the circle row when labels
+are present`).
+8. **Run code-reviewer + qa-expert in parallel** on the diff:
+   same rule as feature tickets. Action every blocker before PR.
+9. **PR + CI + squash-merge + Jira close.** Same lifecycle as a
+   feature ticket: see "Closing tickets" + "Pull requests" above.
+10. **Update the manual-test sheet.** After merge, edit the current
+    child Task of FHS-254 to add a "FIXED in FHS-XXX, re-verify" note
+    against every row that referenced the bug.
+
+**Anti-pattern:** start coding before the bug is in Jira / In
+Progress / linked to FHS-251. The link is what keeps the manual
+test pass sane: without it, fixed bugs leave stale rows in the
+sheet that get re-flagged the next sprint.
+
+### Decisions log sync
+
+ADRs in [`documents/decisions/`](documents/decisions/) are the canonical record of
+project shape. **When an ADR is added, superseded, or materially edited,
+propagate the change across every surface that references it** in the
+same PR (per bundling) or the same session (for Jira / Confluence):
+
+| Surface                                                                                  | What to update                                                                     |
+| ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `documents/decisions/<NNNN>-<slug>.md`                                                   | The ADR file itself                                                                |
+| `documents/decisions/README.md`                                                          | Index entry: accepted / superseded marker                                          |
+| Root [`README.md`](README.md)                                                            | ADR list entry (if present)                                                        |
+| [`documents/strategy/saas-transformation.md`](documents/strategy/saas-transformation.md) | Architecture table row pointing at the ADR                                         |
+| `AGENTS.md`                                                                              | Any conventions section that references the ADR                                    |
+| Jira: epic comment                                                                       | Structured comment summarising the ADR + linking to repo                           |
+| Jira: child tickets                                                                      | Comment on any open ticket whose scope shifts (header: "Scope adjusted: ADR XXXX") |
+| Confluence: "Family Hub: Vision & Strategy" → "Architecture & multi-tenancy"             | Update architecture table row                                                      |
+| Confluence: "FHS: Epics & Tickets"                                                       | Refresh via builder (per the Confluence-refresh rule)                              |
+
+Cross-link both ways: the ADR file links to the Jira ticket(s) it
+answers; those tickets link back to the ADR. Never delete a superseded
+ADR: flip its `Status:` line to `superseded by NNNN`. After any
+update, re-read at least the strategy doc + Architecture Confluence
+page to confirm they don't still reference the dead decision.
+
+### Feature impact analysis (pre-implementation)
+
+Before writing implementation code for **any** feature, ticket, or
+behaviour change, produce a short impact analysis covering at minimum
+**frontend**, **backend**, and **infrastructure**. Surface it to the
+user and wait for acknowledgement before starting the work: this
+catches cross-cutting dependencies (a new column needs a migration +
+API schema + form field + RLS policy + seed update) before they turn
+into mid-PR rework.
+
+Where it goes:
+
+- For ticketed work, post the analysis as a comment on the Jira
+  ticket (structured ADF: bullets/headings, never prose). For ad-hoc
+  tasks, post it inline in the conversation.
+- If the work warrants a `documents/features/<slug>.md` doc, add an
+  **Impact analysis** section to that doc as well.
+
+Dimensions to scan (skip a row only if you can articulate why it's
+genuinely untouched: silence is not the same as "no impact"):
+
+| Layer                    | Examples of what to check                                                                                               |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| **Frontend (web)**       | Routes, components, hooks, forms, validation schemas, copy, design-system tokens, accessibility, mobile-web fallback    |
+| **Backend (api)**        | New/changed endpoints, Zod schemas, OpenAPI spec, middleware, jobs, error envelope, rate limits, idempotency            |
+| **Data layer**           | Drizzle schema, migrations (and rollback), RLS policies, indexes, seed data, fixtures, FKs to `tenant_id` / `users`     |
+| **Infrastructure**       | Railway services, env vars, sign-in server (GoTrue) settings, Stripe products/webhooks, CI workflows, scheduled jobs    |
+| **Auth / multi-tenancy** | New role checks, RLS coverage on new tables, `tenant_id` propagation, JWKS / JWT claim assumptions                      |
+| **Cross-cutting**        | Shared rules (`shared-rules` in family-hub-api), test helpers, feature flags, observability surfaces                    |
+| **Tests**                | Which tier (unit / integration / e2e / perf) gains scenarios; new fixtures; whether tenant-isolation scenario is needed |
+| **Docs / process**       | `documents/features/`, `documents/technical/`, ADRs (does this need a new one?), AGENTS.md, README, OpenAPI clients     |
+
+Recommended template for the analysis comment:
+
+```markdown
+**Impact analysis: FHS-XXX**
+
+- **Frontend:** <bullets, or "no impact: server-only">
+- **Backend:** <bullets, or "no impact">
+- **Data:** <migration? new table? RLS?>
+- **Infra:** <env vars, services, CI?>
+- **Tests:** <which tier(s); tenant-isolation scenario yes/no>
+- **Docs/ADR:** <files to update; ADR needed yes/no>
+- **Risks / unknowns:** <open questions to resolve before coding>
+```
+
+**Anti-pattern:** "I'll figure out the FE/infra parts as I go." That's
+how a backend ticket grows a surprise migration on day 3 and a copy
+change on day 4. Cheap to think about up front; expensive to discover
+mid-implementation.
+
+The analysis is not a separate Jira ticket: it's a comment on the
+implementing ticket. Once acknowledged, it becomes the scope contract
+for the PR.
+
+### Change-impact propagation
+
+When a change has impact beyond its immediate surface, **flag it
+explicitly before doing the work**, wait for acknowledgement, then
+update every affected surface in the same PR (per the bundling rule).
+Categories to scan when proposing a change:
+
+| Category               | Surfaces                                                                                          |
+| ---------------------- | ------------------------------------------------------------------------------------------------- |
+| Product / requirements | `documents/features/`, Jira ticket scope + AC, PR template                                        |
+| Technical              | code, schemas, API contracts (OpenAPI), migrations, infra (Railway, GoTrue, Stripe), CI workflows |
+| Tests                  | Vitest unit, Vitest integration, Playwright E2E, k6 perf                                          |
+| Architecture           | ADRs in `documents/decisions/`: write a new ADR or supersede an existing one                      |
+| Strategy               | `documents/strategy/saas-transformation.md` and any Confluence mirror                             |
+| Business / launch      | pricing, marketing copy, sales collateral, onboarding flow copy                                   |
+| Confluence             | `https://qualicion2.atlassian.net/spaces/FA/...` pages                                            |
+| Legal / compliance     | LICENSE, ToS, privacy policy, regulated-tier obligations                                          |
+| Process                | AGENTS.md rules, PR template, memory entries                                                      |
+
+**Anti-pattern:** silently updating only the file the user pointed at,
+leaving every other affected surface stale. That's how a "small"
+change becomes a months-later bug or contradiction.
+
+When in doubt, flag it. The cost of "this change touches X / Y / Z,
+OK?" is trivial; the cost of letting drift compound is large. Close
+the loop in the Jira ticket's closing comment by listing the surfaces
+touched so the audit trail captures the cascade.
+
+### Magic Patterns tickets: Magic Patterns does the design, not you
+
+**Founder rule (2026-08-06).** On any ticket whose job is to produce a
+design, the design is generated **inside Magic Patterns by prompting it**.
+Writing the component yourself and pushing it into the artifact is not
+doing the ticket: it is doing the ticket's job for it and calling the
+result a design.
+
+How to run a Magic Patterns design ticket:
+
+| Step | What you do                                                                                                                                                                                                        |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1    | `get_design_status` on the editor, so you are not prompting over a run in flight                                                                                                                                   |
+| 2    | Read the existing files first, so the prompt builds on what is there                                                                                                                                               |
+| 3    | `send_prompt` with the brief. **This is the design step.** Name the problem, the states to cover, the widths, and the accessibility floor                                                                          |
+| 4    | Say in the prompt that only the project's existing tokens and components may be used, or it will invent its own                                                                                                    |
+| 5    | Poll `get_design_status` every 60s until `isGenerating` is false                                                                                                                                                   |
+| 6    | Read what it produced and check it against the ticket before handing it over                                                                                                                                       |
+| 7    | Give the founder the editor URL and wait for approval before writing any app code                                                                                                                                  |
+| 8    | **Report back to Jira the moment the design lands.** Comment with the editor URL, what it covers and any revision, then transition the ticket. A finished design sitting in To Do is a lie about where the work is |
+| 9    | When the founder revises the design, re-read it, port the revision, and add it to the same comment trail                                                                                                           |
+
+Rules:
+
+- **EVERY prompt names all three screen sizes.** Founder rule
+  (2026-08-06): no Magic Patterns prompt goes out without asking for
+  **phone (375px), tablet (768px) and desktop (1024px and up)**
+  explicitly, and saying what must hold at each: nothing overflows,
+  no horizontal scrolling on the main flow, every control at least
+  44x44px, and the layout stacks rather than shrinking to unreadable.
+  Magic Patterns is desktop-biased by default and will hand back a
+  desktop-only mock unless told otherwise. A prompt that names only
+  one width is an incomplete prompt: rewrite it before sending.
+  This sits alongside the repo's responsive-design rule, which is a
+  merge gate for the build that follows.
+- **Never hand-author the design.** `write_artifact_files` is for
+  correcting a generated design (a wrong token, a missed accessibility
+  requirement), not for authoring one.
+- **The design ticket and the build ticket are separate**, and the design
+  one blocks the build one. Link them so the trail is visible.
+- **Default to the existing design** (`kudjspxd3xxroueg5jw11o`) rather
+  than a fresh standalone one, so the result inherits the real tokens and
+  components. A standalone design invents its own and drifts.
+- **The design ticket moves as the design moves**, not when the build
+  ships: prompt sent means In Progress, design handed over means Done.
+  The build ticket carries the code.
+- **Record every deviation** when the port lands: anything in the design
+  that would break accessibility, privacy or a product decision is fixed
+  in the implementation and written down with the reason, not copied.
+
+### Design system (design-system): single source of truth
+
+**Any design change updates the design system in the same PR.** When a
+ticket introduces or alters a visual component (badge styles, role
+colour maps, chips, stat tiles, progress bars, avatar discs, form
+shells), the reusable piece lives in `design-system`: never copy-pasted
+across pages. Rules:
+
+- New component used (or clearly usable) by 2+ pages → extract to
+  `design-system/src/<Name>.tsx`, export from `index.ts`, unit-test it
+  under `tests/unit/ui/`.
+- **Every component ships with a Storybook story** at
+  `design-system/src/<Name>.stories.tsx` covering the props that actually
+  branch (each variant, disabled, error, long text). `pnpm storybook`
+  opens the catalogue. The guard test
+  [`tests/unit/web/ui/stories-coverage.test.ts`](tests/unit/web/ui/stories-coverage.test.ts)
+  fails the build on a component with no story, so this is a merge gate,
+  not a suggestion. See
+  [design-system.md](documents/technical/design-system.md) (FHS-643).
+- Shared visual constants (role → colour/label maps, pastel palettes,
+  status chip styles) live in `design-system`, not per-page consts.
+- When matching a Magic Patterns design, port the mock's component into
+  the design system first, then consume it from the page.
+- Drift check at PR self-review: if the diff adds a styled block that
+  already exists elsewhere, consolidate before merging.
+
+### Code style
+
+- **No em dashes, ever.** Not in UI copy, docs, PDFs, commits, Jira
+  comments, README files, or marketing content (founder rule,
+  2026-08-03). Use a comma, colon, parentheses or a period instead.
+  Removal of pre-existing ones across the repo is tracked in FHS-553.
+- TypeScript strict mode everywhere.
+- 2-space indent, LF line endings, UTF-8 (enforced by Prettier, settings in `package.json`).
+- No comments unless the _why_ is non-obvious.
+- Avoid premature abstraction: three similar lines beats a wrong helper.
+
+### Secrets
+
+- All secrets live in `.env.local` (gitignored) or Railway env vars.
+- Never commit tokens, API keys, or `.env*` files. GitHub secret scanning +
+  push protection are enabled on the repo as a backstop.
+
+### Multi-tenancy
+
+- Every table that holds tenant data carries `tenant_id`.
+- Postgres RLS policies enforce isolation: never bypass with `bypassrls`.
+- Tenant context is set per-request in API middleware (FHS-12).
+
+### Responsive design (mobile / tablet / desktop)
+
+> **NON-NEGOTIABLE: applies to EVERYTHING built, every PR, no exceptions.**
+> Any new or changed UI (page, panel, dialog, card, table, form) must be
+> mobile- **and** tablet-friendly before it ships, not just "good on a
+> laptop". This is a merge gate: the responsive sweep below is required, and
+> the PR self-review must state it was done. When in doubt, build mobile-first
+> and scale up. If a layout can't be made to work on a phone, raise it before
+> coding, don't ship a desktop-only screen.
+
+Every page and component **must** look and work correctly across **three
+viewports**:
+
+- **Mobile** (≤ 640px / Tailwind default): single-column stacks,
+  finger-sized tap targets (≥ 44×44px), no horizontal scroll on the
+  main flow, fonts cap at `text-base` for body / `text-3xl` for hero.
+- **Tablet** (`sm:` 640px and `md:` 768px): two-column layouts where
+  density allows; nav can stay horizontal but trim labels if needed.
+- **Desktop** (`lg:` 1024px and `xl:` 1280px+): full multi-column
+  layouts, the design's intended max widths (`max-w-7xl` for
+  marketing, `max-w-[1400px]` for authenticated dashboards), hover
+  affordances enabled.
+
+How to apply:
+
+- Default styles target **mobile** first; layer `sm:` / `md:` / `lg:` /
+  `xl:` breakpoints to scale up. Never the other way around.
+- Use the design system's **`xs: 375px`** breakpoint (preset extension)
+  for the smallest devices when extra-tight rules are needed.
+- Hover effects (`hover:-translate-y-1`, `hover:shadow-neo-lg`,
+  `hover:scale-…`) must be wrapped in `motion-safe:` so
+  `prefers-reduced-motion` users see colour changes only, and pointer-
+  device-only via `@media (hover: hover)` if the effect is jarring on
+  touch devices.
+- Test in dev across at least three breakpoints before opening a PR:
+  open Chrome DevTools → device toolbar → toggle iPhone, iPad, Desktop.
+- Include a **"verified across breakpoints"** line in PR self-review
+  notes for any UI ticket.
+- **Magic Patterns hand-offs are not exempt.** When a change ports a
+  Magic Patterns design, check whether the generated layout already
+  handles mobile and tablet. If it does, verify it at all three
+  viewports; if it does not (MP output is often desktop-biased), design
+  and build the mobile/tablet behaviour yourself in the same change:
+  stack columns, collapse nav, wrap tables in `overflow-x-auto`, resize
+  tap targets. Never ship the desktop-only interpretation of a mock.
+- **Responsive tests are part of done.** Every UI ticket ships tests
+  that exercise the changed surface at mobile and tablet widths, not
+  just desktop: run the relevant Playwright scenario on the
+  mobile-chrome project (or set a 375px / 768px viewport explicitly)
+  and assert the layout-critical behaviour (no horizontal scroll on the
+  main flow, nav reachable, primary actions visible and tappable).
+  Where a component branches on viewport, unit-test that logic too. A
+  UI PR with desktop-only tests is incomplete.
+
+The "make it look good on Sarah's MacBook" reflex is fine for first
+draft; the responsive sweep is **not optional** before merge: Family
+Hub's adult users are 70%+ on phones in the field (per persona doc).
+
+---
+
+## Local-only conventions
+
+These mirror the founder's global agent rules but are repeated here for
+emphasis on this repo:
+
+- **Never** update `git config` (local or global) without asking.
+- **Never** run destructive git commands (`reset --hard`, `push --force`,
+  `branch -D`, `clean -f`) without explicit user authorization.
+- **Never** skip hooks (`--no-verify`, `--no-gpg-sign`) without explicit ask.
+- **Never** create planning, decision, or analysis docs unless asked:
+  ADRs in `documents/decisions/` are the exception (created via FHS-171/172/174).
+
+### gh / git account safety
+
+The Mac has multiple GitHub accounts logged into `gh` (`qualicion`,
+`familyhubapp971`, `BabatundeOduniyi-ext_adcb`). This repo is owned
+by **`familyhubapp971`**: only that account has push + PR-merge
+permission. Most commands (`gh pr checks`, `gh api`, `gh pr view`)
+work from any account, but anything that **mutates the repo**
+(`git push`, `gh pr create`, `gh pr merge`, `gh pr close`, branch
+creation on the remote) fails with `403` or
+`does not have the correct permissions` when the active gh account
+isn't `familyhubapp971`.
+
+Before running any push / PR-create / PR-merge / branch-push command:
+
+1. Check the active account: `gh auth status 2>&1 | head -5`
+   (look for the `Active account: true` line under `familyhubapp971`).
+2. If the active account is anything else, switch:
+   `gh auth switch --user familyhubapp971`.
+3. If the switch fails with a keyring timeout (e.g. another
+   `gh`/`git` invocation is mid-flight holding the keyring lock),
+   **wait for that command to finish** before retrying: don't
+   force-kill or sleep-loop. A second retry of `gh auth switch
+--user familyhubapp971` after the other command completes is
+   usually enough.
+
+Read-only commands (`gh pr checks`, `gh pr view`, `gh api`,
+`gh run view`) do not require switching: they work fine from any
+authenticated account.
+
+Concrete pattern that's safe to embed in any push/merge step:
+
+```bash
+# Ensure we're pushing as the repo owner.
+gh auth switch --user familyhubapp971 2>&1 | tail -1
+git push -u origin <branch>
+```
+
+Anti-pattern: pushing without checking, getting a confusing
+`Permission to use Bash with command git push has been denied` or
+`403`-style failure, then retrying without switching the account:
+the failure isn't a permission denial from the tool, it's GitHub
+rejecting the push because the wrong account is active.
+
+---
+
+## Explaining decisions: keep it simple
+
+When explaining a decision, trade-off, or recommendation:
+
+- **Lead with the answer** in one sentence. The reasoning comes after, only
+  if asked or if it changes the user's choice.
+- **Pick the shortest format that fits.** A one-line answer beats a
+  three-paragraph one. A two-row table beats a five-row one. Bullets
+  beat prose when there are 3+ parallel items, but don't bullet a
+  single thought.
+- **No hedging stacks.** "It depends, but generally, in most cases,
+  arguably..." → just say which way you'd go and why. One sentence on
+  the main trade-off is enough.
+- **Skip the optionality theatre.** Don't list 3 options when 1 is
+  obviously right and 2 are filler. Recommend the one and mention an
+  alternative only if it's a real choice.
+- **Drop ceremony.** No "Great question!", no "Let me walk you through
+  this", no "TL;DR" headers on a 4-line answer.
+- **Plain language over jargon** unless the jargon is the precise term.
+  "Use a shared password manager so teammates don't DM you keys" beats
+  "Implement centralized credential management with team-shared vault
+  primitives for secret rotation hygiene."
+
+If a decision genuinely needs more depth (architectural, multi-surface,
+risk-bearing), **flag that it needs depth** and write the full version.
+Most decisions don't.
+
+---
+
+## Requirements documentation
+
+Use the **`product-manager`** agent (brief:
+[`.claude/agents/product-manager.md`](.claude/agents/product-manager.md)) to capture and
+maintain all app requirements. Whenever a new feature is discussed,
+clarified, or scoped, the product-manager agent is responsible for writing
+or updating the requirement docs **before** implementation begins.
+
+### Folder layout
+
+```text
+documents/
+  README.md         # index of subfolders + how docs flow
+  features/         # what & why: owned by product-manager agent
+    <feature-slug>.md
+  technical/        # how: owned by engineering subagents
+    architecture.md
+    deployment.md
+    slos.md
+    api/
+    data-model/
+  decisions/        # ADRs: durable choices, immutable once accepted
+    NNNN-kebab-case.md
+  strategy/         # long-form strategy docs (vision, positioning, transformation)
+    <topic-slug>.md
+```
+
+- `documents/features/`: user-facing requirements: personas, user stories,
+  acceptance criteria, success metrics, scope boundaries.
+- `documents/technical/`: implementation specs derived from features:
+  API contracts, schemas, sequence diagrams, infra topology, SLOs.
+- `documents/decisions/`: ADRs in MADR-lite format; see the
+  [ADR section](#architecture-decision-records-adrs) below.
+- `documents/strategy/`: long-form direction-setting docs that inform
+  the features backlog.
+- Every feature should have a corresponding technical doc once
+  implementation begins. Cross-link both directions.
+
+Each subfolder has its own `README.md` documenting purpose, when to add a
+doc, and naming convention: read those before adding to the folder.
+
+### User story format (required)
+
+Every requirement in `documents/features/` must be expressed as one or
+more **user stories** with **Gherkin (Given/When/Then)** acceptance
+criteria. Template:
+
+```markdown
+# Feature: <name>
+
+**Jira:** FHS-XXX
+**Status:** draft | approved | in-progress | shipped
+**Owner:** <product-manager handle>
+
+## User stories
+
+### Story 1: <short title>
+
+**As a** <persona>
+**I want** <capability>
+**so that** <benefit>
+
+#### Acceptance criteria
+
+**Scenario: <descriptive scenario name>**
+
+- **Given** <initial context / preconditions>
+- **And** <additional context, optional>
+- **When** <action / event>
+- **Then** <observable outcome>
+- **And** <additional outcome, optional>
+
+**Scenario: <edge case or alternative path>**
+
+- **Given** ...
+- **When** ...
+- **Then** ...
+
+## Out of scope
+
+- ...
+
+## Open questions
+
+- ...
+
+## Success metrics
+
+- ...
+```
+
+### Workflow
+
+1. New feature request → invoke `product-manager` subagent.
+2. Agent drafts `documents/features/<slug>.md` using the template above.
+3. User reviews and approves the requirement doc.
+4. Engineering subagents (`backend-developer`, `frontend-developer`,
+   `api-designer`, etc.) translate it into `documents/technical/...` specs.
+5. Implementation references the Gherkin scenarios as the source of truth
+   for both unit tests (Vitest) and E2E tests (Playwright). Test names
+   should mirror scenario names so traceability is automatic.
+
+### Keep feature docs in sync with what shipped: ALWAYS
+
+> **Founder reminder (2026-08-06): this keeps getting skipped. Every change,
+> every time.** Before opening ANY pull request, ask "which file in
+> `documents/features/` describes what I just changed?" and update it in that
+> same PR. Design ports count. Bug fixes count. Copy changes count. If the
+> answer is "none exists", write one. If the answer is genuinely "no user-
+> visible behaviour changed", say so explicitly in the PR self-review. A PR
+> that silently leaves the feature docs behind is not finished.
+>
+> The doc records what SHIPPED, not what was planned, and lists every
+> deliberate deviation from the design with the reason, so a future reader
+> can tell a decision from an accident.
+
+> **NON-NEGOTIABLE, EVERY TIME behaviour or requirements change.** The moment a
+> feature is built, changed, tightened, redesigned, or has a bug fixed that
+> alters how it behaves, the matching `documents/features/<slug>.md` MUST be
+> created or updated in the SAME session/PR: never "later", never a follow-up
+> ticket. This is a merge gate: a PR that changes behaviour without touching the
+> feature doc (or stating in self-review why none applies) is incomplete. If no
+> doc exists yet for the touched feature, create one. Do this automatically,
+> without being asked.
+
+Use the user-story + Gherkin template above, written from the **shipped
+behaviour** (not the original pitch) so it stays accurate. Cross-link every Jira
+key the feature shipped under and any ADR that governs its design (e.g.
+`**ADR:** [0020: ...](../decisions/0020-...md)`). When a design change lands
+across several tickets, list them all. **Drift between shipped behaviour and
+`documents/features/` is a bug**, treat it like any other bug: fix it in the
+same change, don't just note it. This is the exception to the
+"never create docs unless asked" local rule: feature docs in
+`documents/features/` are always expected to track reality.
+
+### Keep the ticket's acceptance criteria in sync too
+
+**Every ticket that has acceptance criteria MUST keep them true to what
+actually gets built.** Which tickets carry AC at all is decided by the table in
+"Ticket bodies" above: product and technical work always does; admin, process,
+writing and planning tickets skip them. Add Gherkin AC when you create or pick
+up a ticket that needs them (not just a title), and **when the build refines or changes the
+behaviour, update the ticket's AC to match what shipped**: in the same
+session, before closing. The closing comment then maps each AC to the shipped
+behaviour (pass/fail), so the ticket reads true to what's live. An AC that
+describes behaviour the code doesn't have (or omits behaviour it does) is drift:
+fix it like any other drift. This applies to Stories, Tasks, and Bugs alike.
+
+---
+
+## Testing
+
+Four test tiers under one **centralized** `tests/` directory at the repo
+root: never colocated next to source. Mirrors the legacy family-hub
+layout, reorganised by package within each tier.
+
+### Test coverage per ticket
+
+**Every ticket must ship with the test tiers that apply to its scope.**
+A ticket isn't done (and the PR isn't mergeable) until the right
+tiers are green. Use this matrix to decide what's required:
+
+| Ticket scope                                             | Unit                              | Integration                       | E2E                                                             | Perf              |
+| -------------------------------------------------------- | --------------------------------- | --------------------------------- | --------------------------------------------------------------- | ----------------- |
+| Pure logic / utility / type-only                         | required                          | n/a                               | n/a                                                             | n/a               |
+| `design-system` primitive (Button, Card, PinInput, etc.) | required (per prop / interaction) | n/a                               | n/a                                                             | n/a               |
+| API endpoint or middleware                               | required (handler logic)          | required (real Postgres + RLS)    | required if user-visible                                        | smoke if hot path |
+| Page / route (src/)                                      | required (component shape)        | n/a                               | required (Gherkin scenario from `documents/features/<slug>.md`) | n/a               |
+| Schema migration                                         | required (drizzle-kit dry-run)    | required (RLS + tenant-isolation) | required if it affects a user flow                              | n/a               |
+| Cross-cutting (auth, feature flag, billing)              | required                          | required                          | required (full happy + sad path)                                | smoke             |
+
+Rules of thumb:
+
+- **Unit**: fast (<200ms each), no I/O, mocks for collaborators.
+  Asserts ONE thing per test. Never mock the unit under test.
+- **Integration**: real Postgres + real network. Always include a
+  tenant-isolation scenario for any tenant-scoped table or endpoint.
+- **E2E**: `tests/e2e/features/<slug>.feature` scenario names must
+  match the Gherkin scenarios in `documents/features/<slug>.md`
+  character-for-character. That's the Jira AC ↔ test traceability
+  contract.
+- **Perf**: only when the change touches a hot path (request handlers,
+  list endpoints, anything in the dashboard fan-out). k6 smoke is
+  enough for most tickets; load/stress run pre-release.
+
+If a ticket genuinely has no testable surface (pure docs, pure config),
+say so explicitly in the PR self-review section. Don't ship "no tests
+needed" silently: that's how regressions creep in.
+
+### Folder structure (canonical)
+
+```text
+tests/
+  unit/
+    web/                              # mirrors src/ (areas, public-pages, app)
+    ui/                               # design system components
+  e2e/
+    playwright.config.ts              # full matrix
+    playwright.critical.config.ts     # @critical subset for PR CI
+    features/                         # mirror documents/features/<slug>.md scenario names
+    steps/                            # one file per feature slug
+    support/pages/                    # page objects (no raw locators in steps)
+```
+
+The `test` block in `vite.config.ts` runs every unit test (web site and
+design system). Integration and performance tests live in `family-hub-api`.
+
+### Unit: Vitest
+
+- **Where:** `tests/unit/{web,ui}/...` mirroring source hierarchy.
+- **File naming:** `*.test.ts` / `*.test.tsx` (reserve `*.spec.ts` for integration).
+- **Run:** `pnpm test` (the `test` block in `vite.config.ts`, runs every unit test); `pnpm test:watch`; `pnpm test:coverage` for merged lcov.
+- **Environment:** `jsdom` + `@testing-library/react`.
+- **Coverage thresholds (starting):** lines 70%, branches 60%, functions 70%: raise to 80/70/80 after FHS-186 baseline. Hard-gating only after thresholds calibrate.
+- **Scope:** pure functions, single class/module, no I/O. Mock external collaborators, **never** mock the thing under test.
+
+### Integration and performance tests
+
+These test the server, so they live in `family-hub-api` with its rules
+(real Postgres, a tenant isolation scenario for every tenant-scoped
+endpoint, k6 thresholds tied to `documents/technical/slos.md`).
+
+### E2E: Playwright + playwright-bdd
+
+- **Where:** `tests/e2e/`. Two configs: `playwright.config.ts` (full matrix) and `playwright.critical.config.ts` (`@critical`-tagged subset, chromium only).
+- **Traceability contract:** scenario names in `tests/e2e/features/<slug>.feature` are **character-for-character identical** to the Gherkin scenarios in `documents/features/<slug>.md`. `bddgen` generates the spec; the generated `test()` name carries through. This is the Jira AC ↔ test traceability mechanism.
+- **Page objects:** `tests/e2e/support/pages/<FeatureName>Page.ts`. No raw `page.locator()` in step files.
+- **Authenticated pages (FHS-516):** a spec that needs a signed-in `/t/:slug/*` page imports `test`/`expect` from `tests/e2e/support/fixtures.ts` (not `@playwright/test`) and depends on the **`authedFamily`** fixture: it seeds a fresh isolated family + admin/child/habit, mints an ES256 JWT the local api trusts (via the test-only `E2E_TEST_JWKS` override in family-hub-api's `src/security/auth.ts`, honoured **only** under `NODE_ENV=test`), and injects a supabase-js session into `localStorage`, so the spec can `page.goto('/t/<slug>/…')` already logged in. The critical config points the web dev's `VITE_API_URL` and `VITE_AUTH_URL` at the local api, which trusts the test token's fixed issuer (`tests/e2e/support/auth/env.ts`), so it needs no secret (FHS-700). `authed-smoke.feature` is the reference example.
+- **Browser matrix:** chromium only on PR (critical subset, fast); full matrix (chromium + webkit + mobile-chrome) post-merge to staging.
+- **Run:** `pnpm -F @familyhub/e2e test:e2e` (full), `test:e2e:critical` (PR-fast subset), `test:e2e:ui` (interactive). Each script runs `bddgen` first then `playwright test`. The configs start the server from `../family-hub-api` (or `FH_API_DIR`).
+
+### Cross-tier rules
+
+- **No mocking the DB in integration or E2E.** Real Postgres is mandatory.
+- **Test names mirror Gherkin scenario names** for automatic AC traceability.
+- **A feature is not "done"** until its tier-appropriate tests pass green in CI: the pre-merge checklist enforces this.
+- **Shared test helpers live in family-hub-api's `tests/helpers`** (FHS-184): `withTenant()`, factories, `testDb`, `makeRequest()`. Never duplicate these in test files.
+- **Pipeline orchestration** (per the test-automator design):
+  - **PR CI (must finish < 5 min, gates merge):** unit + integration + e2e-critical + typecheck (parallel jobs).
+  - **Post-merge to staging:** e2e-full matrix + perf smoke.
+  - **Nightly:** perf load (daily) + perf soak (weekly Sunday).
+  - **Pre-release:** perf stress before staging → main batch promotion.
+
+---
+
+## API contracts (OpenAPI / Swagger): NON-NEGOTIABLE
+
+Every endpoint is documented in the OpenAPI spec, updated in the same PR as
+the endpoint. The spec, the Postman collection and the CI check that
+enforces them live in `family-hub-api` (`api-docs/`, `src/api-docs/`); its
+CLAUDE.md has the full rule. This repo only reads the spec.
+
+---
+
+## Architecture Decision Records (ADRs)
+
+ADRs live in `documents/decisions/`. One file per decision:
+`NNNN-short-title.md` (zero-padded sequential numbering, kebab-case).
+
+Write an ADR whenever you make a decision that:
+
+- changes the shape of the system in a way someone might later question,
+- chooses one viable option over another (e.g., Postgres vs DynamoDB),
+- locks in a constraint future contributors need to respect.
+
+Don't write an ADR for routine implementation choices: only for the
+ones future-you would want context on.
+
+Template (Nygard / MADR-lite):
+
+```markdown
+# NNNN: <decision title>
+
+**Status:** proposed | accepted | superseded by NNNN
+**Date:** YYYY-MM-DD
+**Jira:** FHS-XXX (optional)
+
+## Context
+
+<What forces are at play? What problem are we solving?>
+
+## Decision
+
+<What did we decide?>
+
+## Consequences
+
+<What becomes easier? What becomes harder? What follow-ups does this create?>
+
+## Alternatives considered
+
+- **<option A>**: why rejected
+- **<option B>**: why rejected
+```
+
+Initial seed ADRs are tracked in FHS-171, FHS-172, FHS-174.
+
+---
+
+## Pre-merge checklist
+
+Every PR author confirms (the [PR template](.github/pull_request_template.md)
+mirrors this list):
+
+- [ ] **Jira:** ticket key in branch name + PR title + commit footer
+- [ ] **Tests:** unit (Vitest) + E2E (Playwright) added/updated; `pnpm test` green
+- [ ] **Acceptance criteria:** every Gherkin scenario from the ticket maps to a passing test
+- [ ] **Types:** TypeScript strict, no new `any`, schemas validate at boundaries
+- [ ] **Multi-tenancy:** queries respect `tenant_id` / RLS; no `bypassrls`
+- [ ] **Secrets:** nothing in git that should be in `.env.local` or Railway env
+- [ ] **OpenAPI/Swagger + Postman:** endpoint changes are made in `family-hub-api`, with its spec regenerated in the same PR there.
+- [ ] **Docs:** `documents/features/` or `documents/technical/` updated; ADR added in `documents/decisions/` if a decision was made
+- [ ] **Migrations:** Drizzle migration committed; rollback path noted in PR body
+- [ ] **Observability:** new failure modes have logs/metrics; alerts updated if SLO-relevant
+- [ ] **Manual verification:** described in the PR body: what was actually exercised in a browser / curl
+
+---
+
+## Living document
+
+This file is **expected to evolve**. When we encounter a recurring decision,
+a footgun, or a convention worth codifying, add it here in the relevant
+section. Drift between code reality and AGENTS.md is a bug: fix in the
+same PR that introduced the drift.

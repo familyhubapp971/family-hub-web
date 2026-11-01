@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { StickerAmountPicker } from '../../../../packages/ui/src';
+import { StickerAmountPicker } from '../../../../design-system/src';
 
 // FHS-623: StickerAmountPicker is the whole-number stepper the five money
 // action flows use to pick "how many stickers", paired with a money preview

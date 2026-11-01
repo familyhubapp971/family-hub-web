@@ -1,12 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { AvatarEmojiPicker } from '../../../../packages/ui/src/AvatarEmojiPicker';
+import { AvatarEmojiPicker } from '../../../../design-system/src/AvatarEmojiPicker';
 import {
   applyTone,
   isToneable,
   stripTone,
   SKIN_TONES,
-} from '../../../../packages/ui/src/emojiTone';
+} from '../../../../design-system/src/emojiTone';
 
 // FHS-433: AvatarEmojiPicker + emojiTone utility tests.
 //

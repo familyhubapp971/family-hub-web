@@ -18,7 +18,7 @@ Then('I see the email {string} on the verify-email page', async ({ page }, email
 Then('the Open Gmail link points at mail.google.com', async ({ page }) => {
   // The button is provider-aware: gmail.com → Gmail / mail.google.com.
   // Outlook / Yahoo / iCloud / etc. map to their own webmail (covered
-  // by unit tests in tests/unit/web/lib/webmail.test.ts).
+  // by unit tests in tests/unit/web/app/lib/webmail.test.ts).
   const link = new VerifyEmailPage(page).openMailboxLink();
   await expect(link).toHaveAttribute('href', 'https://mail.google.com/');
   await expect(link).toHaveAttribute('target', '_blank');

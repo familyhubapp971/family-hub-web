@@ -89,9 +89,13 @@ documents/commercial/
 documents/impact/
 documents/investments/
 documents/qa/
-# Local copy of apps/api/postman for sharing; refreshed by openapi:generate (FHS-665).
+# Local copy of family-hub-api's api-docs/postman for sharing; refreshed by openapi:generate (FHS-665).
 documents/postman/
 # Signed contracts hold personal details; their sources stay local only.
 scripts/docs/doc-src/fh-qa-contractor-*.html
 documents/media/
 PRIVACY-TODO.md
+
+# FHS-688: local copy of family-hub-api used by the browser tests
+tests/e2e/.api-repo
+.ci-api/

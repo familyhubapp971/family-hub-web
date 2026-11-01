@@ -4,8 +4,8 @@
 # regressions on the integration branch), and weekly (catches new query-pack
 # rules without waiting for a code change).
 #
-# Default config + javascript-typescript pack covers the api (Node/Hono),
-# the web (React), packages/shared, and any future TS surface.
+# Default config + javascript-typescript pack covers the web site (React),
+# the design system, the browser tests and the scripts.
 
 name: codeql
 

@@ -72,17 +72,17 @@ live.
 
 ## Pages shipped
 
-| Route             | Page                        | Component                                          |
-| ----------------- | --------------------------- | -------------------------------------------------- |
-| `/legal`          | Index: 4 cards              | `apps/web/src/pages/legal/LegalIndexPage.tsx`      |
-| `/legal/privacy`  | Privacy Policy              | `apps/web/src/pages/legal/PrivacyPolicyPage.tsx`   |
-| `/legal/children` | Children & Parents          | `apps/web/src/pages/legal/ChildrenPrivacyPage.tsx` |
-| `/legal/terms`    | Terms of Service            | `apps/web/src/pages/legal/TermsOfServicePage.tsx`  |
-| `/legal/cookies`  | Cookies & Storage           | `apps/web/src/pages/legal/CookiesPage.tsx`         |
-| `/privacy`        | Redirect → `/legal/privacy` | inline `<Navigate>` in `apps/web/src/App.tsx`      |
+| Route             | Page                        | Component                                        |
+| ----------------- | --------------------------- | ------------------------------------------------ |
+| `/legal`          | Index: 4 cards              | `src/public-pages/legal/LegalIndexPage.tsx`      |
+| `/legal/privacy`  | Privacy Policy              | `src/public-pages/legal/PrivacyPolicyPage.tsx`   |
+| `/legal/children` | Children & Parents          | `src/public-pages/legal/ChildrenPrivacyPage.tsx` |
+| `/legal/terms`    | Terms of Service            | `src/public-pages/legal/TermsOfServicePage.tsx`  |
+| `/legal/cookies`  | Cookies & Storage           | `src/public-pages/legal/CookiesPage.tsx`         |
+| `/privacy`        | Redirect → `/legal/privacy` | inline `<Navigate>` in `src/app/App.tsx`         |
 
-Shared shell: `apps/web/src/pages/legal/LegalLayout.tsx` (title card, pill nav,
-table of contents, numbered sections) plus `apps/web/src/components/SiteChrome.tsx`
+Shared shell: `src/public-pages/legal/LegalLayout.tsx` (title card, pill nav,
+table of contents, numbered sections) plus `src/public-pages/SiteChrome.tsx`
 (`SiteHeader`/`SiteFooter`, reused by the marketing header/footer look already on
 `WelcomePage`/`PricingPage`/`AboutPage`).
 
@@ -138,4 +138,4 @@ table of contents, numbered sections) plus `apps/web/src/components/SiteChrome.t
   `localStorage.getItem('fh_loggedIn')` logged-in check (that key is never set
   anywhere in this codebase) and uses the repo's own `Button` from
   `@familyhub/ui` instead of a local mock.
-- Tests: `tests/unit/web/legal/{LegalIndexPage,PrivacyPolicyPage,PrivacyRedirect}.test.tsx`.
+- Tests: `tests/unit/web/public-pages/legal/{LegalIndexPage,PrivacyPolicyPage,PrivacyRedirect}.test.tsx`.

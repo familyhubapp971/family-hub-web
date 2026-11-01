@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { StepHeading } from '../../../../packages/ui/src/StepHeading';
+import { StepHeading } from '../../../../design-system/src/StepHeading';
 
 // FHS-630: the numbered step heading from the approved Magic Patterns design.
 // It exists so the money sheets stop reading as one long form: a parent can

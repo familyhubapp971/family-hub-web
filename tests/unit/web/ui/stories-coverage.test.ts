@@ -13,7 +13,7 @@ import { describe, expect, it } from 'vitest';
 
 const SRC = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  '../../../../packages/ui/src',
+  '../../../../design-system/src',
 );
 
 /**

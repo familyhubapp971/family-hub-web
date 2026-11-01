@@ -1,0 +1,12 @@
+/* Global styles + Tailwind directives live in the shared design system.
+   Importing here so the web site inherits font stack, kingdom background,
+   neo-brutalist scrollbars, and base layer rules. */
+@import '@familyhub/ui/styles/globals.css';
+
+/* FHS-671: while the floating Feedback button shows on a parent screen, every
+   page gets room at its end, so the button never covers the last row. */
+body.fh-feedback-fab #root::after {
+  content: '';
+  display: block;
+  height: 6rem;
+}

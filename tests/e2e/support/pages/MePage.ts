@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 
-// Page object for /me: mirrors apps/web/src/pages/MePage.tsx.
+// Page object for /me: mirrors src/areas/members/MePage.tsx.
 // Testid selectors:
 //   me-loading       : initial spinner
 //   me-greeting      : "Hello, {email}" h1

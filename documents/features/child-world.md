@@ -92,7 +92,7 @@ account menu's "View World" links.
 ## Implementation notes
 
 - The header reuses the exported `ProfilePill` from
-  `apps/web/src/pages/tenant/AppHeader.tsx`: same account menu (children +
+  `src/app/layout/AppHeader.tsx`: same account menu (children +
   Manage family + Reward settings + Log out) as the dashboard, so the two
   never drift.
 - The pill's name comes from the caller's roster row: `GET /api/members` now

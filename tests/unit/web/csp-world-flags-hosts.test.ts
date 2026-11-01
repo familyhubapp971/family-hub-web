@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 // Vite's ?raw import gives the file contents as a string (works under the
 // vitest/Vite server, where import.meta.url is an http URL).
-import indexHtml from '../../../apps/web/index.html?raw';
+import indexHtml from '../../../index.html?raw';
 
 // Regression guard for FHS-332: the World Flags feature loads images + data
 // from public hosts. The Content-Security-Policy in index.html must keep

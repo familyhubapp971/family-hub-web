@@ -312,7 +312,7 @@ export async function seedFamily(options: SeedFamilyOptions = {}): Promise<Seede
 
   // One sticker per day, worth 1 each, unallocated: exactly what the save,
   // cash-out and invest routes draw from (habit_stickers where is_allocated
-  // is false, see apps/api/src/routes/mw-financial.ts).
+  // is false, see family-hub-api src/areas/my-world/mw-financial.ts).
   const earned = options.earnedStickers ?? 0;
   if (earned > 7) {
     throw new Error(

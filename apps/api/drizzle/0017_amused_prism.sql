@@ -1,1 +1,0 @@
-ALTER TABLE "notices" ADD COLUMN "icon" text;

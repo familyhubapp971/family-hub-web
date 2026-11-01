@@ -108,16 +108,16 @@ Scale, Enterprise, with metered usage on Scale and Enterprise.
 
 ## Architecture
 
-| Concern           | Decision                                                                                                                         | ADR                                                   |
-| ----------------- | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| Tenant isolation  | Shared DB, shared schema, `tenant_id` + Postgres RLS                                                                             | [0001](../decisions/0001-multi-tenancy.md)            |
-| Tenant routing    | Subdomain (`<slug>.familyhub.app`) resolved by middleware + AsyncLocalStorage                                                    | [0002](../decisions/0002-subdomain-tenant-routing.md) |
-| Auth              | Supabase Auth (email + Google OAuth, JWT, magic links, templates)                                                                | [0003](../decisions/0003-auth-library.md)             |
-| Auth environments | Two Supabase projects (staging + production) on Free; migrate to one-project + `staging` branch when org upgrades to Pro         | [0008](../decisions/0008-supabase-environments.md)    |
-| Billing           | Stripe (Checkout + Customer Portal + webhooks + metered usage)                                                                   | [0004](../decisions/0004-stripe-billing.md)           |
-| Codebase          | pnpm monorepo: `apps/{api,web}`, `packages/{shared,ui,test-utils}`                                                               | [0005](../decisions/0005-monorepo-structure.md)       |
-| Branching         | `feature/*` → `staging` → `main`, conditional squash / merge-commit                                                              | [0006](../decisions/0006-branching-strategy.md)       |
-| Stack reuse       | Reuse the proven family-hub stack verbatim; swap individual libraries via superseding ADRs only when a concrete metric forces it | [0007](../decisions/0007-stack-reuse.md)              |
+| Concern           | Decision                                                                                                                           | ADR                                                   |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| Tenant isolation  | Shared DB, shared schema, `tenant_id` + Postgres RLS                                                                               | [0001](../decisions/0001-multi-tenancy.md)            |
+| Tenant routing    | Subdomain (`<slug>.familyhub.app`) resolved by middleware + AsyncLocalStorage                                                      | [0002](../decisions/0002-subdomain-tenant-routing.md) |
+| Auth              | Our own GoTrue on Railway behind the api (magic links, Google, ES256 passes, branded emails); production on Supabase until FHS-701 | [0022](../decisions/0022-own-sign-in-server.md)       |
+| Auth environments | One private GoTrue service per Railway environment (staging, production)                                                           | [0022](../decisions/0022-own-sign-in-server.md)       |
+| Billing           | Stripe (Checkout + Customer Portal + webhooks + metered usage)                                                                     | [0004](../decisions/0004-stripe-billing.md)           |
+| Codebase          | Three repos: `family-hub-api`, `family-hub-web`, `family-hub-app`, grouped by product area (split in progress)                     | [0021](../decisions/0021-three-repo-split.md)         |
+| Branching         | `feature/*` → `staging` → `main`, conditional squash / merge-commit                                                                | [0006](../decisions/0006-branching-strategy.md)       |
+| Stack reuse       | Reuse the proven family-hub stack verbatim; swap individual libraries via superseding ADRs only when a concrete metric forces it   | [0007](../decisions/0007-stack-reuse.md)              |
 
 Module toggling per tenant means each family / organization activates
 only the pillars they need, Family Admin Hub may be on for one

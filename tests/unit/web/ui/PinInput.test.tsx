@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { PinInput } from '../../../../packages/ui/src';
+import { PinInput } from '../../../../design-system/src';
 
 const cells = () => screen.getAllByRole('textbox') as HTMLInputElement[];
 

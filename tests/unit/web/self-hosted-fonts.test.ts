@@ -8,9 +8,9 @@ import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const root = resolve(__dirname, '../../..');
-const indexHtml = readFileSync(resolve(root, 'apps/web/index.html'), 'utf8');
-const globalsCss = readFileSync(resolve(root, 'packages/ui/src/styles/globals.css'), 'utf8');
-const preset = readFileSync(resolve(root, 'packages/ui/tailwind.preset.js'), 'utf8');
+const indexHtml = readFileSync(resolve(root, 'index.html'), 'utf8');
+const globalsCss = readFileSync(resolve(root, 'design-system/src/styles/globals.css'), 'utf8');
+const preset = readFileSync(resolve(root, 'design-system/tailwind.preset.js'), 'utf8');
 
 const FONT_FILES = [
   'fredoka-one-latin.woff2',
@@ -22,15 +22,15 @@ describe('self-hosted brand fonts', () => {
   it('ships every font file the stylesheet asks for', () => {
     for (const file of FONT_FILES) {
       expect(
-        existsSync(resolve(root, 'apps/web/public/fonts', file)),
-        `${file} must exist in apps/web/public/fonts`,
+        existsSync(resolve(root, 'public/fonts', file)),
+        `${file} must exist in public/fonts`,
       ).toBe(true);
       expect(globalsCss).toContain(`/fonts/${file}`);
     }
   });
 
   it('carries the font licence alongside the files', () => {
-    const licence = readFileSync(resolve(root, 'apps/web/public/fonts/OFL.txt'), 'utf8');
+    const licence = readFileSync(resolve(root, 'public/fonts/OFL.txt'), 'utf8');
     expect(licence).toMatch(/SIL Open Font License/i);
     expect(licence).toMatch(/Nunito/);
     expect(licence).toMatch(/Fredoka One/);

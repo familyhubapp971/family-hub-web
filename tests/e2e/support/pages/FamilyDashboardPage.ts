@@ -3,7 +3,7 @@ import type { Page } from '@playwright/test';
 /**
  * FHS-645: the six areas of the parent dashboard, driven the way a parent
  * drives them. Labels are the ones the app actually renders (see
- * apps/web/src/pages/tenant/dashboard-tabs.ts); the panel test id is the
+ * src/app/layout/dashboard-tabs.ts); the panel test id is the
  * "loaded" landmark each panel raises once its request has answered.
  */
 export const DASHBOARD_AREAS = {

@@ -1,4 +1,3 @@
 packages:
-  - 'apps/*'
-  - 'packages/*'
+  - 'design-system'
   - 'tests/e2e'

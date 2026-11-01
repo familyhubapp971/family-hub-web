@@ -5,7 +5,7 @@
 import { test as base } from 'playwright-bdd';
 import type { BrowserContext } from '@playwright/test';
 import { mintE2eAccessToken } from './auth/jwt.js';
-import { resolveSupabaseUrl } from './auth/env.js';
+import { LOCAL_AUTH_URL } from './auth/env.js';
 import { buildSupabaseLocalStorageEntry } from './auth/session.js';
 import { cleanupFamily, seedFamily, type SeededFamily } from './auth/seed.js';
 
@@ -28,7 +28,7 @@ import { cleanupFamily, seedFamily, type SeededFamily } from './auth/seed.js';
 //      real email.
 //   2. Mints an ES256 JWT for that user (support/auth/jwt.ts), signed with
 //      the fixed test key the api trusts ONLY when E2E_TEST_JWKS is set
-//      (see playwright.config.ts + apps/api/src/middleware/auth.ts).
+//      (see playwright.config.ts + family-hub-api src/security/auth.ts).
 //   3. Injects a supabase-js-shaped session into localStorage via
 //      `context.addInitScript` (support/auth/session.ts), so it's already
 //      there before the web app's first script runs: no UI login needed.
@@ -59,7 +59,7 @@ async function createSessionEntry(
     Buffer.from(accessToken.split('.')[1] ?? '', 'base64url').toString('utf8'),
   ) as { exp: number };
   const sessionEntry = buildSupabaseLocalStorageEntry({
-    supabaseUrl: resolveSupabaseUrl(),
+    authUrl: LOCAL_AUTH_URL,
     accessToken,
     userId,
     email,
