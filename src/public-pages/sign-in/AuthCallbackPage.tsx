@@ -94,13 +94,19 @@ export function AuthCallbackPage() {
     authError ? 'error' : exchangeCodeRef.current ? 'pending' : 'done',
   );
 
-  // An expired/invalid link must not leave the user signed in via a previously
-  // persisted session: sign out so they truly start over with a fresh link.
+  // FHS-714: an old link used to sign out whoever was signed in, so tapping a
+  // stale email logged a parent out of the device for nothing. Someone signed
+  // in now stays signed in, and the error screen offers "Continue as". With no
+  // session the sign-out stays, clearing anything half-finished.
   useEffect(() => {
-    if (!authError) return;
+    if (!authError || loading || session) return;
     void supabase.auth.signOut().catch(() => {
       /* best-effort: the error message + no-navigate already protect the user */
     });
+  }, [authError, loading, session]);
+
+  useEffect(() => {
+    if (!authError) return;
     if (typeof window !== 'undefined' && window.history?.replaceState) {
       try {
         const url = new URL(window.location.href);
@@ -169,9 +175,13 @@ export function AuthCallbackPage() {
   // form to request a new one, rather than borrowing the loading screen's
   // stalled state and showing a progress bar while nothing is happening.
   if (status.kind === 'error') {
+    // FHS-714: wait the moment it takes to know whether they are signed in,
+    // so the screen never shows "send a new link" and then swaps.
+    if (loading) return <LoadingScreen context="callback" />;
     return (
       <LinkExpired
         reason={reasonFromError(status.message)}
+        signedInAs={session?.user?.email}
         email={
           emailFromLink(searchParams) ||
           sessionStorage.getItem('fh.signup.email') ||
