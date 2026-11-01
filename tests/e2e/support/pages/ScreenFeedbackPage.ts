@@ -3,6 +3,13 @@ import { expect } from '@playwright/test';
 
 // FHS-670: the per-screen feedback button and its form.
 
+// FHS-717: a real 1x1 PNG, so the browser can open it and shrink it like a
+// phone photo. A made-up file would be refused as not a photo.
+const TINY_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+  'base64',
+);
+
 export class ScreenFeedbackPage {
   constructor(private readonly page: Page) {}
 
@@ -92,6 +99,41 @@ export class ScreenFeedbackPage {
     expect(box!.y).toBeGreaterThanOrEqual(0);
     expect(box!.x + box!.width).toBeLessThanOrEqual(size!.width);
     expect(box!.y + box!.height).toBeLessThanOrEqual(size!.height);
+  }
+
+  /** FHS-717: the issue report opens at the top, its heading on screen. */
+  async expectIssueReportOnScreen(): Promise<void> {
+    await this.expectInsideViewport(
+      this.dialog.getByRole('heading', { name: 'Found an issue on this screen? Report it.' }),
+    );
+    await this.expectInsideViewport(this.dialog.getByLabel('What went wrong?'));
+  }
+
+  async expectAddPhotosTappable(): Promise<void> {
+    const add = this.page.getByTestId('screen-feedback-add-photos');
+    await add.scrollIntoViewIfNeeded();
+    await this.expectInsideViewport(add);
+    const box = await add.boundingBox();
+    expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+  }
+
+  async describeIssue(words: string): Promise<void> {
+    await this.dialog.getByLabel('What went wrong?').fill(words);
+  }
+
+  async addPhoto(): Promise<void> {
+    await this.page.getByTestId('screen-feedback-photo-input').setInputFiles({
+      name: 'problem.png',
+      mimeType: 'image/png',
+      buffer: TINY_PNG,
+    });
+  }
+
+  async expectPhotoReady(): Promise<void> {
+    await expect(this.page.getByTestId('screen-feedback-photo')).toHaveCount(1);
+    await expect(this.dialog.getByRole('button', { name: 'Remove photo 1' })).toBeVisible();
+    await expect(this.page.getByTestId('screen-feedback-submit')).toBeEnabled();
   }
 
   async expectReminder(area: string): Promise<void> {

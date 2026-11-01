@@ -16,7 +16,7 @@ vi.stubGlobal('fetch', mocks.fetchMock);
 
 type SessionLike = {
   access_token?: string;
-  user?: { email?: string; user_metadata?: Record<string, unknown> };
+  user?: { id?: string; email?: string; user_metadata?: Record<string, unknown> };
 } | null;
 const authState: { session: SessionLike } = {
   session: {
@@ -30,6 +30,7 @@ vi.mock('../../../../../src/app/lib/auth-context', () => ({
 }));
 
 import { LegacyDashboardRedirect } from '../../../../../src/app/redirects/LegacyDashboardRedirect';
+import { forgetFamilyCodes, knownFamilyCodes } from '../../../../../src/app/lib/my-families';
 
 function Location() {
   return <span data-testid="location">{useLocation().pathname}</span>;
@@ -68,6 +69,24 @@ describe('<LegacyDashboardRedirect />', () => {
     });
     renderRoute();
     await waitFor(() => expect(screen.getByTestId('tenant-dashboard')).toBeInTheDocument());
+  });
+
+  // FHS-718: the family page it opens next checks the family is yours. It
+  // uses this list instead of asking the server a second time.
+  it('keeps the family list, so the family page it opens does not ask again', async () => {
+    forgetFamilyCodes();
+    authState.session = {
+      access_token: 'tok-1',
+      user: { id: 'user-1', email: 'sarah@example.com', user_metadata: {} },
+    };
+    mocks.fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ tenants: [{ slug: 'e29b-41d4' }] }),
+    });
+    mocks.fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ claimed: [] }) });
+    renderRoute();
+    await waitFor(() => expect(screen.getByTestId('tenant-dashboard')).toBeInTheDocument());
+    expect(knownFamilyCodes('user-1')).toEqual(['e29b-41d4']);
   });
 
   it('renders the create-family panel when /api/me returns no tenants', async () => {

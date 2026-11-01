@@ -69,3 +69,28 @@ Then('the header and close button of the feedback form are on screen', async ({ 
 When('I scroll to Send inside the feedback form', async ({ page }) => {
   await new ScreenFeedbackPage(page).scrollToSend();
 });
+
+// FHS-717: report an issue with a photo.
+Then('the issue report is at the top of the feedback form', async ({ page }) => {
+  await new ScreenFeedbackPage(page).expectIssueReportOnScreen();
+});
+
+Then('the Add photos button is big enough to tap', async ({ page }) => {
+  await new ScreenFeedbackPage(page).expectAddPhotosTappable();
+});
+
+When('I write {string} under What went wrong', async ({ page }, words: string) => {
+  await new ScreenFeedbackPage(page).describeIssue(words);
+});
+
+When('I add a photo of the problem', async ({ page }) => {
+  await new ScreenFeedbackPage(page).addPhoto();
+});
+
+Then('I see the photo ready to send', async ({ page }) => {
+  await new ScreenFeedbackPage(page).expectPhotoReady();
+});
+
+When('I send the feedback', async ({ page }) => {
+  await new ScreenFeedbackPage(page).send();
+});

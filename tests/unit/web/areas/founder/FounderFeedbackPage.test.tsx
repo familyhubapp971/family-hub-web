@@ -62,10 +62,19 @@ function typePasscode(digits: string) {
   fireEvent.click(screen.getByTestId('founder-open'));
 }
 
+// FHS-717: "Issues to fix" loads on its own from /api/founder/issues. It has
+// its own tests in IssuesToFix.test.tsx; here it just answers with no issues,
+// so the feedback calls below keep their order.
+const issuesFetch = vi.fn();
+
 beforeEach(() => {
   sessionStorage.clear();
   fetchMock.mockReset();
-  vi.stubGlobal('fetch', fetchMock);
+  issuesFetch.mockReset();
+  issuesFetch.mockImplementation(async () => json({ issues: [] }));
+  vi.stubGlobal('fetch', (url: string, init?: RequestInit) =>
+    String(url).includes('/api/founder/issues') ? issuesFetch(url, init) : fetchMock(url, init),
+  );
 });
 
 afterEach(() => vi.unstubAllGlobals());
@@ -138,6 +147,19 @@ describe('<FounderFeedbackPage />', () => {
     render(<FounderFeedbackPage />);
     await waitFor(() => expect(screen.getByText('Enter the passcode')).toBeInTheDocument());
     expect(sessionStorage.getItem('fh-founder-token')).toBeNull();
+    expect(screen.getByTestId('founder-notice')).toHaveTextContent(
+      'Your admin pass ran out. Enter the passcode again.',
+    );
+  });
+
+  it('does not say the pass ran out when the founder taps Lock', async () => {
+    sessionStorage.setItem('fh-founder-token', 'tok');
+    fetchMock.mockResolvedValueOnce(json({ rows: ROWS }));
+    render(<FounderFeedbackPage />);
+    await waitFor(() => expect(screen.getByTestId('founder-sign-out')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('founder-sign-out'));
+    expect(screen.getByText('Enter the passcode')).toBeInTheDocument();
+    expect(screen.queryByTestId('founder-notice')).toBeNull();
   });
 
   it('says so when the server cannot be reached', async () => {
@@ -181,6 +203,38 @@ describe('<FounderFeedbackPage />', () => {
     render(<FounderFeedbackPage />);
     await waitFor(() => expect(screen.getByTestId('founder-summary')).toBeInTheDocument());
     expect(screen.queryByText('Enter the passcode')).toBeNull();
+  });
+
+  // FHS-717
+  it('puts Issues to fix at the top, above At a glance', async () => {
+    sessionStorage.setItem('fh-founder-token', 'tok');
+    fetchMock.mockResolvedValueOnce(json({ rows: ROWS }));
+    render(<FounderFeedbackPage />);
+    await waitFor(() => expect(screen.getByTestId('founder-tile-answers')).toBeInTheDocument());
+    const issues = screen.getByRole('heading', { name: /Issues to fix/ });
+    const glance = screen.getByRole('heading', { name: /At a glance/ });
+    expect(issues.compareDocumentPosition(glance) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(issuesFetch.mock.calls[0]![1].headers['x-founder-token']).toBe('tok');
+  });
+
+  it('still shows Issues to fix when the feedback cannot load', async () => {
+    sessionStorage.setItem('fh-founder-token', 'tok');
+    fetchMock.mockRejectedValueOnce(new TypeError('network down'));
+    render(<FounderFeedbackPage />);
+    await waitFor(() => expect(screen.getByText('No issues to fix. Nice.')).toBeInTheDocument());
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not load feedback');
+  });
+
+  it('locks again when the pass runs out while reading issues', async () => {
+    sessionStorage.setItem('fh-founder-token', 'old');
+    fetchMock.mockReturnValue(new Promise(() => {}));
+    issuesFetch.mockImplementation(async () => json({ error: 'sign in again' }, 401));
+    render(<FounderFeedbackPage />);
+    await waitFor(() => expect(screen.getByText('Enter the passcode')).toBeInTheDocument());
+    expect(sessionStorage.getItem('fh-founder-token')).toBeNull();
+    expect(screen.getByTestId('founder-notice')).toHaveTextContent(
+      'Your admin pass ran out. Enter the passcode again.',
+    );
   });
 
   // FHS-675: the visual view.

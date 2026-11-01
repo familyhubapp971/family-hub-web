@@ -6,6 +6,10 @@
  * filters and a spreadsheet download. The passcode is checked on the server
  * (FOUNDER_PASSCODE); the page only keeps the 8-hour token it gets back, in
  * this browser tab.
+ *
+ * FHS-717: "Issues to fix" sits at the top, above the feedback. It loads on
+ * its own, so it still shows if the feedback list fails, and the other way
+ * round.
  */
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
@@ -27,6 +31,7 @@ import {
   type RatingSummary,
   type ScreenSummary,
 } from '../../app/lib/founder-feedback';
+import { IssuesToFix } from './IssuesToFix';
 
 const TOKEN_KEY = 'fh-founder-token';
 
@@ -60,12 +65,20 @@ export function FounderFeedbackPage() {
   const [token, setToken] = useState<string | null>(readToken);
   const [rows, setRows] = useState<FeedbackRow[] | null>(null);
   const [loadError, setLoadError] = useState('');
+  // FHS-717: why the passcode box is back, when the server turned the pass down.
+  const [notice, setNotice] = useState('');
 
   const signOut = useCallback(() => {
     writeToken(null);
     setToken(null);
     setRows(null);
+    setNotice('');
   }, []);
+
+  const passRanOut = useCallback(() => {
+    signOut();
+    setNotice('Your admin pass ran out. Enter the passcode again.');
+  }, [signOut]);
 
   useEffect(() => {
     if (!token) return;
@@ -74,7 +87,7 @@ export function FounderFeedbackPage() {
     fetch(`${API_BASE}/api/founder/feedback`, { headers: { 'x-founder-token': token } })
       .then(async (res) => {
         if (cancelled) return;
-        if (res.status === 401) return signOut();
+        if (res.status === 401) return passRanOut();
         if (!res.ok) throw new Error(String(res.status));
         const body = (await res.json()) as { rows: FeedbackRow[] };
         if (!cancelled) setRows(body.rows);
@@ -85,7 +98,7 @@ export function FounderFeedbackPage() {
     return () => {
       cancelled = true;
     };
-  }, [token, signOut]);
+  }, [token, passRanOut]);
 
   return (
     <div className="flex min-h-screen flex-col bg-kingdom-bg px-4 py-6 text-white sm:px-6">
@@ -105,29 +118,46 @@ export function FounderFeedbackPage() {
           // FHS-674: the passcode box sits in the middle of the space below the title.
           <div className="flex flex-1 items-center justify-center pb-16" data-testid="founder-lock">
             <PasscodeForm
+              notice={notice}
               onUnlocked={(t) => {
                 writeToken(t);
+                setNotice('');
                 setToken(t);
               }}
             />
           </div>
-        ) : loadError ? (
-          <p role="alert" className="rounded-xl border-2 border-black bg-red-50 p-4 text-red-700">
-            {loadError}
-          </p>
-        ) : rows === null ? (
-          <p className="text-purple-200" data-testid="founder-loading">
-            Loading feedback…
-          </p>
         ) : (
-          <FeedbackView rows={rows} />
+          <div className="space-y-8">
+            <IssuesToFix token={token} onUnauthorized={passRanOut} />
+            {loadError ? (
+              <p
+                role="alert"
+                className="rounded-xl border-2 border-black bg-red-50 p-4 text-red-700"
+              >
+                {loadError}
+              </p>
+            ) : rows === null ? (
+              <p className="text-purple-200" data-testid="founder-loading">
+                Loading feedback…
+              </p>
+            ) : (
+              <FeedbackView rows={rows} />
+            )}
+          </div>
         )}
       </div>
     </div>
   );
 }
 
-function PasscodeForm({ onUnlocked }: { onUnlocked: (token: string) => void }) {
+function PasscodeForm({
+  notice,
+  onUnlocked,
+}: {
+  /** Shown above the box when the page locked itself, saying why. */
+  notice: string;
+  onUnlocked: (token: string) => void;
+}) {
   const [passcode, setPasscode] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -173,6 +203,15 @@ function PasscodeForm({ onUnlocked }: { onUnlocked: (token: string) => void }) {
       onSubmit={submit}
       className="mx-auto w-full max-w-sm rounded-2xl border-2 border-black bg-white p-5 text-black shadow-neo sm:p-6"
     >
+      {notice && (
+        <p
+          role="alert"
+          className="mb-3 rounded-xl border-2 border-black bg-pastel-yellow p-3 text-sm font-bold"
+          data-testid="founder-notice"
+        >
+          {notice}
+        </p>
+      )}
       <label htmlFor="founder-passcode" className="mb-3 block font-heading text-xl">
         Enter the passcode
       </label>
