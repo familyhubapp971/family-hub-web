@@ -364,13 +364,33 @@ Schema migrations are forward-only. If a migration is broken:
 
 1. Don't reach for a `down` migration, write a **new forward migration**
    that undoes the bad change.
-2. If data has been corrupted, restore from Railway's automated Postgres
-   backup (Hobby+ plan, not yet available; documented for FHS-202).
-3. Until backups are configured, the recovery path is: re-bootstrap the
-   staging Postgres volume from the Drizzle schema at
-   [`family-hub-api/src/database/schema.ts`](https://github.com/familyhubapp971/family-hub-api/blob/staging/src/database/schema.ts).
-   Seed scripts to be added under [FHS-168](https://qualicion2.atlassian.net/browse/FHS-168);
-   until then, recovery is schema-only and any test data is lost.
+2. If data has been lost or corrupted, restore a snapshot (below).
+
+### Backups and restoring a snapshot (FHS-660)
+
+Production's database takes **daily** (kept 6 days), **weekly** (1 month) and
+**monthly** (3 months) disk snapshots since 2026-11-01. Restoring to an exact
+minute is not possible: that needs Railway's own Postgres image, and ours is
+`postgres:16-alpine`.
+
+> **A restore replaces the live database and deploys at once.** It puts the
+> snapshot on the database service in place of the current disk, with no
+> review step. Everything written after the snapshot is gone from the live
+> database. Only restore production in a real emergency, with the founder's
+> go-ahead.
+
+| Step | What to do                                                                                                                                                              |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | Take a fresh manual snapshot first, so the restore itself can be undone: `railway postgres pitr backup create --name "Before restore <date>" -s postgres -e production` |
+| 2    | Pick the snapshot: `railway postgres pitr backup list -s postgres -e production`                                                                                        |
+| 3    | Restore it: `railway postgres pitr backup restore <id> -s postgres -e production`                                                                                       |
+| 4    | Check the row counts and sign in. The api and sign-in server reconnect on their own                                                                                     |
+| 5    | The old disk stays in the project, unattached, as the way back                                                                                                          |
+
+Proven by a drill on staging on 2026-11-01. A marker table added after the
+snapshot was gone after the restore; all 68 tables matched; sign-in and family
+data worked straight away. Staging's old disk, `postgres-volume`, is kept on
+purpose.
 
 ## Region constraints
 
