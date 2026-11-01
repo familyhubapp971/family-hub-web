@@ -2,8 +2,9 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { Button, Card } from '@familyhub/ui';
 import type { Session } from '@supabase/supabase-js';
-import { useAuth } from '../lib/auth-context';
+import { signOutAll, useAuth } from '../lib/auth-context';
 import { API_BASE } from '../lib/api';
+import { friendlyAuthErrorMessage } from '../lib/auth-errors';
 import { LoadingScreen } from '../components/LoadingScreen';
 
 // FHS-227: bridge for the un-prefixed `/dashboard` route. Fetches
@@ -25,7 +26,11 @@ interface MeResponse {
   tenants?: Array<{ slug: string }>;
 }
 
-type State = { kind: 'loading' } | { kind: 'redirect'; to: string } | { kind: 'no-tenant' };
+type State =
+  | { kind: 'loading' }
+  | { kind: 'redirect'; to: string }
+  | { kind: 'no-tenant' }
+  | { kind: 'unreachable' };
 
 /**
  * FHS-713: tidies a family web address as it is typed on a phone. Capitals
@@ -67,6 +72,7 @@ function deriveSlug(name: string): string {
 export function LegacyDashboardRedirect() {
   const { session } = useAuth();
   const [state, setState] = useState<State>({ kind: 'loading' });
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     if (!session) return;
@@ -76,8 +82,11 @@ export function LegacyDashboardRedirect() {
         const res = await fetch(`${API_BASE}/api/me`, {
           headers: { Authorization: `Bearer ${session.access_token}` },
         });
+        // FHS-714: a failed check says nothing about whether they have a
+        // family. Treating it as "no family" offered an existing family the
+        // create-a-family form, so it gets a retry instead.
         if (!res.ok) {
-          if (!cancelled) setState({ kind: 'no-tenant' });
+          if (!cancelled) setState({ kind: 'unreachable' });
           return;
         }
         const body = (await res.json()) as MeResponse;
@@ -110,15 +119,25 @@ export function LegacyDashboardRedirect() {
           setState(slug ? { kind: 'redirect', to: `/t/${slug}/dashboard` } : { kind: 'no-tenant' });
         }
       } catch {
-        if (!cancelled) setState({ kind: 'no-tenant' });
+        if (!cancelled) setState({ kind: 'unreachable' });
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [session]);
+  }, [session, attempt]);
 
   if (state.kind === 'redirect') return <Navigate to={state.to} replace />;
+  if (state.kind === 'unreachable') {
+    return (
+      <CouldNotReach
+        onRetry={() => {
+          setState({ kind: 'loading' });
+          setAttempt((n) => n + 1);
+        }}
+      />
+    );
+  }
   if (state.kind === 'no-tenant') {
     // Defensive: a render at no-tenant without a session means the user
     // hit /dashboard unauthenticated. The ProtectedRoute wrapper would
@@ -129,6 +148,31 @@ export function LegacyDashboardRedirect() {
   // FHS-550: this was near-invisible grey text on the dark background while
   // the family was looked up. It is the shared branded wait now.
   return <LoadingScreen context="redirect" />;
+}
+
+function CouldNotReach({ onRetry }: { onRetry: () => void }) {
+  return (
+    <main className="flex min-h-full items-center justify-center bg-kingdom-bg px-4 py-10">
+      <Card
+        className="w-full max-w-md border-4 border-black bg-white p-8 text-center shadow-neo-lg"
+        testId="me-unreachable"
+      >
+        <p className="mb-6 font-body font-bold text-gray-700" role="alert">
+          We couldn&rsquo;t reach Family Hub. Check your signal and try again.
+        </p>
+        <Button
+          type="button"
+          variant="primary"
+          size="lg"
+          fullWidth
+          onClick={onRetry}
+          testId="me-retry"
+        >
+          Try again
+        </Button>
+      </Card>
+    </main>
+  );
 }
 
 interface CreateFamilyPanelProps {
@@ -202,17 +246,28 @@ function CreateFamilyPanel({ session }: CreateFamilyPanelProps) {
       );
       setSubmitting(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Network error. Try again.');
+      setError(friendlyAuthErrorMessage(err instanceof Error ? err.message : 'Network error'));
       setSubmitting(false);
     }
+  }
+
+  async function onLogOut() {
+    await signOutAll();
+    navigate('/login', { replace: true });
   }
 
   return (
     <main className="flex min-h-full items-center justify-center bg-kingdom-bg px-4 py-10">
       <Card className="w-full max-w-md border-4 border-black bg-white p-8 shadow-neo-lg">
         <h1 className="mb-2 font-display text-2xl text-kingdom-bg">Create your family hub</h1>
-        <p className="mb-6 font-body text-sm text-gray-600">
+        <p className="mb-2 font-body text-sm text-gray-600">
           You&rsquo;re signed in, but don&rsquo;t have a family hub yet. Pick a name to get started.
+        </p>
+        {/* FHS-714: an invited parent who signed in with a different email
+            lands here and would make a second family by mistake. Same words
+            as the phone app. */}
+        <p className="mb-6 font-body text-xs text-gray-500" data-testid="no-tenant-invited-hint">
+          Invited to a family? Log out and sign in with the email the invite went to.
         </p>
         <form
           onSubmit={onSubmit}
@@ -302,6 +357,17 @@ function CreateFamilyPanel({ session }: CreateFamilyPanelProps) {
             {submitting ? 'Creating…' : 'Create my family'}
           </Button>
         </form>
+        <p className="mt-4 text-center font-body text-sm text-gray-600">
+          Not you?{' '}
+          <button
+            type="button"
+            onClick={() => void onLogOut()}
+            className="inline-flex min-h-[44px] items-center font-bold text-purple-600 underline decoration-2 underline-offset-2 hover:text-purple-800 focus:outline-none focus-visible:ring-4 focus-visible:ring-pastel-cyan"
+            data-testid="no-tenant-log-out"
+          >
+            Log out
+          </button>
+        </p>
       </Card>
     </main>
   );
