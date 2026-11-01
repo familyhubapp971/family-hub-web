@@ -24,6 +24,26 @@ interface MeResponse {
 
 type State = { kind: 'loading' } | { kind: 'redirect'; to: string } | { kind: 'no-tenant' };
 
+/**
+ * FHS-713: tidies a family web address as it is typed on a phone. Capitals
+ * become small letters (phones capitalise the first letter on their own), and
+ * long dashes (iPhones turn a typed hyphen into one), spaces, dots and symbols
+ * become a single hyphen. A hyphen at the start goes; one at the end stays
+ * while they are still typing.
+ */
+export function cleanSlugInput(raw: string): string {
+  return raw
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+/, '')
+    .slice(0, 63);
+}
+
+/** The address as saved: no hyphen left at the end. */
+function finishSlug(slug: string): string {
+  return slug.replace(/-+$/, '');
+}
+
 function deriveSlug(name: string): string {
   return name
     .toLowerCase()
@@ -128,12 +148,11 @@ function CreateFamilyPanel({ session }: CreateFamilyPanelProps) {
       setError('Family name is required.');
       return;
     }
-    if (!SLUG_RE.test(effectiveSlug) || effectiveSlug.length < 2) {
+    const finalSlug = finishSlug(effectiveSlug);
+    if (!SLUG_RE.test(finalSlug) || finalSlug.length < 2) {
       setError('Family URL must be 2+ lowercase letters, digits or hyphens.');
       return;
     }
-    setSubmitting(true);
-    setError(null);
     // FHS-274: the founder types their own name; no more guessing from
     // auth metadata / email prefixes (which produced names like "FAMILY").
     const displayName = yourName.trim();
@@ -141,6 +160,8 @@ function CreateFamilyPanel({ session }: CreateFamilyPanelProps) {
       setError('Your name is required.');
       return;
     }
+    setSubmitting(true);
+    setError(null);
     try {
       const res = await fetch(`${API_BASE}/api/public/tenant`, {
         method: 'POST',
@@ -148,15 +169,18 @@ function CreateFamilyPanel({ session }: CreateFamilyPanelProps) {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ familyName: fName, displayName, slug: effectiveSlug }),
+        body: JSON.stringify({ familyName: fName, displayName, slug: finalSlug }),
       });
       if (res.status === 200 || res.status === 201) {
-        navigate(`/t/${effectiveSlug}/onboarding`, { replace: true });
+        navigate(`/t/${finalSlug}/onboarding`, { replace: true });
         return;
       }
       if (res.status === 409) {
         setError('That family URL is taken. Try a different one.');
         setSubmitting(false);
+        // FHS-713: keep the taken address in the box to edit, instead of
+        // emptying it (the box used to go blank here).
+        setSlug(finalSlug);
         setEditingSlug(true);
         return;
       }
@@ -235,9 +259,13 @@ function CreateFamilyPanel({ session }: CreateFamilyPanelProps) {
                 id="no-tenant-slug"
                 type="text"
                 value={effectiveSlug}
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 onChange={(e) => {
                   setEditingSlug(true);
-                  setSlug(e.target.value);
+                  setSlug(cleanSlugInput(e.target.value));
+                  setError(null);
                 }}
                 className="flex-1 rounded-md border-2 border-black px-3 py-2"
                 data-testid="no-tenant-slug"
