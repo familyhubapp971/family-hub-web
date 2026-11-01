@@ -196,7 +196,9 @@ function CreateFamilyPanel({ session }: CreateFamilyPanelProps) {
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fName = familyName.trim();
-    if (fName.length < 2) {
+    // FHS-714: one character is enough (a family called 李, a person called
+    // Jo), the same as the server and the phone app.
+    if (fName.length < 1) {
       setError('Family name is required.');
       return;
     }
@@ -208,7 +210,7 @@ function CreateFamilyPanel({ session }: CreateFamilyPanelProps) {
     // FHS-274: the founder types their own name; no more guessing from
     // auth metadata / email prefixes (which produced names like "FAMILY").
     const displayName = yourName.trim();
-    if (displayName.length < 2) {
+    if (displayName.length < 1) {
       setError('Your name is required.');
       return;
     }
@@ -351,7 +353,7 @@ function CreateFamilyPanel({ session }: CreateFamilyPanelProps) {
             variant="primary"
             size="lg"
             fullWidth
-            disabled={submitting || familyName.trim().length < 2 || yourName.trim().length < 2}
+            disabled={submitting || familyName.trim().length < 1 || yourName.trim().length < 1}
             testId="no-tenant-submit"
           >
             {submitting ? 'Creating…' : 'Create my family'}

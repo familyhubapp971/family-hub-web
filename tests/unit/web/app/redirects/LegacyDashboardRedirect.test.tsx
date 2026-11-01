@@ -272,5 +272,14 @@ describe('<LegacyDashboardRedirect />', () => {
       await waitFor(() => expect(screen.getByTestId('no-tenant-create-form')).toBeInTheDocument());
       expect(screen.getByText(`${window.location.host}/t/`)).toBeInTheDocument();
     });
+
+    it('FHS-714: welcomes one-character names, like a family called 李', async () => {
+      renderRoute();
+      await waitFor(() => expect(screen.getByTestId('no-tenant-create-form')).toBeInTheDocument());
+      fireEvent.change(screen.getByTestId('no-tenant-your-name'), { target: { value: 'Jo' } });
+      fireEvent.change(screen.getByTestId('no-tenant-family-name'), { target: { value: '李' } });
+      fireEvent.change(screen.getByTestId('no-tenant-slug'), { target: { value: 'li' } });
+      expect(screen.getByTestId('no-tenant-submit')).not.toBeDisabled();
+    });
   });
 });
