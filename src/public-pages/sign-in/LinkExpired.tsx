@@ -1,5 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { Button, Card } from '@familyhub/ui';
 import { supabase } from '../../app/lib/supabase';
@@ -20,7 +20,7 @@ import { rememberAuthEmail, authCallbackUrl } from '../../app/lib/auth-email';
 // A genuinely slow sign-in is NOT this screen. That stays on LoadingScreen,
 // because it really is still waiting.
 
-export type LinkReason = 'expired' | 'used' | 'invalid';
+export type LinkReason = 'expired' | 'used' | 'invalid' | 'timed-out' | 'google-cancelled';
 
 const REASONS: Record<LinkReason, { emoji: string; title: string; line: string }> = {
   expired: {
@@ -38,11 +38,29 @@ const REASONS: Record<LinkReason, { emoji: string; title: string; line: string }
     title: "That link didn't come through properly",
     line: 'Part of it got lost on the way, which email apps sometimes do. A new one will work.',
   },
+  // FHS-712: Google sign-in left open over 5 minutes. Not a link at all, so
+  // there is no new link to send: the way forward is signing in again.
+  'timed-out': {
+    emoji: '⏳',
+    title: 'That took too long',
+    line: 'We stopped it to keep your account safe. Please try again.',
+  },
+  // FHS-714: Cancel pressed on Google's page. Same words as the phone app.
+  'google-cancelled': {
+    emoji: '↩️',
+    title: "Google sign-in didn't finish",
+    line: 'Please try again.',
+  },
 };
+
+/** Reasons with no email link involved: the way forward is signing in again. */
+const SIGN_IN_AGAIN: LinkReason[] = ['timed-out', 'google-cancelled'];
 
 /** Picks the wording from whatever Supabase said, defaulting to expired. */
 export function reasonFromError(message: string | undefined): LinkReason {
   const m = (message ?? '').toLowerCase();
+  if (/took too long/.test(m)) return 'timed-out';
+  if (/google sign-in didn't finish/.test(m)) return 'google-cancelled';
   if (/already been used|already used/.test(m)) return 'used';
   if (/invalid|malformed|bad_/.test(m)) return 'invalid';
   return 'expired';
@@ -59,10 +77,16 @@ type SendState =
 export function LinkExpired({
   reason = 'expired',
   email: initialEmail = '',
+  signedInAs,
 }: {
   reason?: LinkReason;
   /** Prefilled when we already know the address, empty when we do not. */
   email?: string;
+  /**
+   * FHS-714: the email of whoever is signed in on this device right now. A
+   * dead link changes nothing for them, so the way forward is carrying on.
+   */
+  signedInAs?: string | undefined;
 }) {
   const [email, setEmail] = useState(initialEmail);
   const [state, setState] = useState<SendState>({ kind: 'idle' });
@@ -72,6 +96,7 @@ export function LinkExpired({
   const [knowsAddress, setKnowsAddress] = useState(Boolean(initialEmail));
   const emailInputRef = useRef<HTMLInputElement>(null);
   const copy = REASONS[reason];
+  const navigate = useNavigate();
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -123,108 +148,143 @@ export function LinkExpired({
                 {copy.title}
               </h1>
 
-              <p className="mt-3 font-body font-bold text-gray-600">{copy.line}</p>
+              <p className="mt-3 font-body font-bold text-gray-600">
+                {signedInAs ? "You're still signed in, so there's nothing to fix." : copy.line}
+              </p>
             </div>
 
-            {/* The job is getting a new link, so it happens here rather than
+            {signedInAs ? (
+              // Same words as the phone app.
+              <Button
+                type="button"
+                variant="primary"
+                size="lg"
+                fullWidth
+                testId="link-expired-continue"
+                className="mt-6 min-h-[48px] break-all"
+                onClick={() => navigate('/dashboard')}
+              >
+                Continue as {signedInAs}
+              </Button>
+            ) : SIGN_IN_AGAIN.includes(reason) ? (
+              <Button
+                type="button"
+                variant="primary"
+                size="lg"
+                fullWidth
+                testId="link-expired-try-again"
+                className="mt-6 min-h-[48px]"
+                onClick={() => navigate('/login')}
+              >
+                Back to sign in
+              </Button>
+            ) : (
+              <>
+                {/* The job is getting a new link, so it happens here rather than
                 after a bounce back to sign-in. */}
-            <form onSubmit={onSubmit} className="mt-6" noValidate>
-              {/* FHS-609: the founder's revised design. When we already know
+                <form onSubmit={onSubmit} className="mt-6" noValidate>
+                  {/* FHS-609: the founder's revised design. When we already know
                   where the dead link went we state it once in the panel,
                   nothing to type and nothing to check. The labelled box only
                   appears when we genuinely do not know. This supersedes the
                   FHS-602 read-only box; the address itself still arrives via
                   the link (FHS-605) or device memory (FHS-604). */}
-              {knowsAddress ? (
-                <div
-                  className="rounded-xl border-2 border-black bg-pastel-cyan p-4 text-center shadow-neo-xs"
-                  data-testid="link-expired-known-address"
-                >
-                  <p className="font-body text-sm font-bold text-gray-600">We will send it to</p>
-                  <p className="mt-1 break-words font-heading text-lg text-black">{email}</p>
-                </div>
-              ) : (
-                <>
-                  <label
-                    htmlFor="relink-email"
-                    className="block font-body text-xs font-bold uppercase tracking-widest text-gray-500"
-                  >
-                    Email <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    ref={emailInputRef}
-                    id="relink-email"
-                    type="email"
-                    required
-                    autoComplete="email"
-                    placeholder="sarah@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    data-testid="link-expired-email"
-                    className="mt-1.5 min-h-[48px] w-full overflow-hidden text-ellipsis rounded-xl border-2 border-black p-3 font-body font-bold shadow-neo-xs placeholder:font-bold placeholder:text-gray-400 focus:outline-none focus:ring-4 focus:ring-pastel-cyan"
-                  />
-                </>
-              )}
+                  {knowsAddress ? (
+                    <div
+                      className="rounded-xl border-2 border-black bg-pastel-cyan p-4 text-center shadow-neo-xs"
+                      data-testid="link-expired-known-address"
+                    >
+                      <p className="font-body text-sm font-bold text-gray-600">
+                        We will send it to
+                      </p>
+                      <p className="mt-1 break-words font-heading text-lg text-black">{email}</p>
+                    </div>
+                  ) : (
+                    <>
+                      <label
+                        htmlFor="relink-email"
+                        className="block font-body text-xs font-bold uppercase tracking-widest text-gray-500"
+                      >
+                        Email <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        ref={emailInputRef}
+                        id="relink-email"
+                        type="email"
+                        required
+                        autoComplete="email"
+                        placeholder="sarah@example.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        data-testid="link-expired-email"
+                        className="mt-1.5 min-h-[48px] w-full overflow-hidden text-ellipsis rounded-xl border-2 border-black p-3 font-body font-bold shadow-neo-xs placeholder:font-bold placeholder:text-gray-400 focus:outline-none focus:ring-4 focus:ring-pastel-cyan"
+                      />
+                    </>
+                  )}
 
-              {/* FHS-578: the slot reserves one line so the button never moves
+                  {/* FHS-578: the slot reserves one line so the button never moves
                   when a send fails, but it used to reserve a 20px band on top
                   of the button's own margin, which pushed the button 32px
                   below the address panel where the design has 16px. One tight
                   line plus a 4px margin lands at 24px. */}
-              <div
-                className="mt-1 min-h-[1rem]"
-                aria-live="polite"
-                data-testid="link-expired-error-slot"
-              >
-                {state.kind === 'error' && (
-                  <p className="font-body text-xs leading-4 text-red-600" role="alert">
-                    {state.message}
+                  <div
+                    className="mt-1 min-h-[1rem]"
+                    aria-live="polite"
+                    data-testid="link-expired-error-slot"
+                  >
+                    {state.kind === 'error' && (
+                      <p className="font-body text-xs leading-4 text-red-600" role="alert">
+                        {state.message}
+                      </p>
+                    )}
+                  </div>
+
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="lg"
+                    fullWidth
+                    disabled={state.kind === 'sending'}
+                    testId="link-expired-send"
+                    className="mt-1 min-h-[48px]"
+                  >
+                    {state.kind === 'sending' ? 'Sending…' : 'Send me a new link →'}
+                  </Button>
+                </form>
+
+                {knowsAddress ? (
+                  <p className="mt-3 text-center">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // Clear it for them and put the cursor in the box, so
+                        // nobody has to delete the old address by hand.
+                        setKnowsAddress(false);
+                        setEmail('');
+                        setState({ kind: 'idle' });
+                        requestAnimationFrame(() => emailInputRef.current?.focus());
+                      }}
+                      data-testid="link-expired-different-email"
+                      className="inline-flex min-h-[44px] items-center font-body text-sm font-bold text-purple-600 underline decoration-2 underline-offset-2 hover:text-purple-800 focus:outline-none focus-visible:ring-4 focus-visible:ring-pastel-cyan"
+                    >
+                      Use a different email
+                    </button>
                   </p>
-                )}
-              </div>
+                ) : null}
+              </>
+            )}
 
-              <Button
-                type="submit"
-                variant="primary"
-                size="lg"
-                fullWidth
-                disabled={state.kind === 'sending'}
-                testId="link-expired-send"
-                className="mt-1 min-h-[48px]"
-              >
-                {state.kind === 'sending' ? 'Sending…' : 'Send me a new link →'}
-              </Button>
-            </form>
-
-            {knowsAddress ? (
-              <p className="mt-3 text-center">
-                <button
-                  type="button"
-                  onClick={() => {
-                    // Clear it for them and put the cursor in the box, so
-                    // nobody has to delete the old address by hand.
-                    setKnowsAddress(false);
-                    setEmail('');
-                    setState({ kind: 'idle' });
-                    requestAnimationFrame(() => emailInputRef.current?.focus());
-                  }}
-                  data-testid="link-expired-different-email"
+            {signedInAs || SIGN_IN_AGAIN.includes(reason) ? null : (
+              <p className="mt-2 text-center">
+                <Link
+                  to="/login"
+                  data-testid="link-expired-back"
                   className="inline-flex min-h-[44px] items-center font-body text-sm font-bold text-purple-600 underline decoration-2 underline-offset-2 hover:text-purple-800 focus:outline-none focus-visible:ring-4 focus-visible:ring-pastel-cyan"
                 >
-                  Use a different email
-                </button>
+                  Back to sign in
+                </Link>
               </p>
-            ) : null}
-
-            <p className="mt-2 text-center">
-              <Link
-                to="/login"
-                data-testid="link-expired-back"
-                className="inline-flex min-h-[44px] items-center font-body text-sm font-bold text-purple-600 underline decoration-2 underline-offset-2 hover:text-purple-800 focus:outline-none focus-visible:ring-4 focus-visible:ring-pastel-cyan"
-              >
-                Back to sign in
-              </Link>
-            </p>
+            )}
           </>
         )}
       </Card>

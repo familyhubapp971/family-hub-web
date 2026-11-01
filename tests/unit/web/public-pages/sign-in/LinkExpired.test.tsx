@@ -149,4 +149,17 @@ describe('LinkExpired', () => {
     expect(error.className).toContain('text-xs');
     expect(error.className).toContain('leading-4');
   });
+
+  it('FHS-714: someone still signed in is told there is nothing to fix', () => {
+    renderScreen({ reason: 'used', signedInAs: 'sarah@example.com', email: 'sarah@example.com' });
+    expect(
+      screen.getByText("You're still signed in, so there's nothing to fix."),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('link-expired-continue').textContent).toBe(
+      'Continue as sarah@example.com',
+    );
+    // Nothing to send and nowhere to go back to: carrying on is the only step.
+    expect(screen.queryByTestId('link-expired-send')).toBeNull();
+    expect(screen.queryByTestId('link-expired-back')).toBeNull();
+  });
 });

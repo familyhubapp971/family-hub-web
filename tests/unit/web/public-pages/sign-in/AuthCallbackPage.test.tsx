@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { AuthCallbackPage } from '../../../../../src/public-pages/sign-in/AuthCallbackPage';
 
@@ -71,11 +71,13 @@ describe('<AuthCallbackPage />', () => {
   });
 
   // FHS-331: an expired magic link must not look "signed in" via a stale
-  // persisted session. The callback shows the expired message, does not
-  // navigate into the app, and signs out.
-  it('rejects an expired link even with a stale session, and signs out', async () => {
+  // persisted session. The callback shows the expired message and does not
+  // navigate into the app on its own.
+  // FHS-714: but tapping an old email no longer signs out whoever is signed
+  // in. They are told nothing needs fixing and can carry on.
+  it('FHS-714: an old sign-in email keeps a signed-in parent signed in', async () => {
     authState.session = {
-      access_token: 'stale-jwt',
+      access_token: 'live-jwt',
       user: { id: 'u1', email: 'sarah@example.com', user_metadata: {} },
     };
     renderAt(
@@ -83,14 +85,93 @@ describe('<AuthCallbackPage />', () => {
     );
     // FHS-575: a dead link gets its own screen, not the loader's alert.
     expect(screen.getByTestId('link-expired-title').textContent).toMatch(/expired/i);
-    // Must NOT have navigated into the app.
+    expect(
+      screen.getByText("You're still signed in, so there's nothing to fix."),
+    ).toBeInTheDocument();
+    // Must NOT have navigated into the app by itself.
     expect(screen.queryByTestId('route-marker')).toBeNull();
+    expect(signOut).not.toHaveBeenCalled();
+  });
+
+  it('FHS-714: "Continue as" takes a signed-in parent to their dashboard', async () => {
+    authState.session = {
+      access_token: 'live-jwt',
+      user: { id: 'u1', email: 'sarah@example.com', user_metadata: {} },
+    };
+    renderAt(
+      '/auth/callback#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired',
+    );
+    const button = screen.getByTestId('link-expired-continue');
+    expect(button.textContent).toBe('Continue as sarah@example.com');
+    expect(screen.queryByTestId('link-expired-send')).toBeNull();
+    fireEvent.click(button);
+    expect(screen.getByTestId('route-marker').textContent).toBe('dashboard');
+  });
+
+  it("FHS-714: someone else's old link on a shared laptop gets the normal screen, not 'Continue as'", async () => {
+    authState.session = {
+      access_token: 'live-jwt',
+      user: { id: 'u1', email: 'mum@example.com', user_metadata: {} },
+    };
+    renderAt(
+      '/auth/callback?email=dad%40example.com#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired',
+    );
+    expect(screen.queryByTestId('link-expired-continue')).toBeNull();
+    expect(screen.getByTestId('link-expired-send')).toBeInTheDocument();
+  });
+
+  it('FHS-714: with nobody signed in, an old link still signs out and offers a new one', async () => {
+    renderAt(
+      '/auth/callback#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired',
+    );
+    expect(screen.getByTestId('link-expired-send')).toBeInTheDocument();
+    expect(screen.queryByTestId('link-expired-continue')).toBeNull();
     await waitFor(() => expect(signOut).toHaveBeenCalled());
+  });
+
+  it('FHS-714: waits to know who is signed in before choosing the screen', () => {
+    authState.loading = true;
+    renderAt(
+      '/auth/callback#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired',
+    );
+    expect(screen.getByTestId('loading-screen')).toBeInTheDocument();
+    expect(screen.queryByTestId('link-expired')).toBeNull();
+    expect(signOut).not.toHaveBeenCalled();
   });
 
   // FHS-604: an email link opens a NEW tab, whose sessionStorage is empty.
   // The device-level memory has to carry the address across, or the screen
   // asks who you are even though we sent the link to you.
+  it('FHS-712: a Google sign-in left open too long says so, and offers sign-in again', async () => {
+    renderAt(
+      '/auth/callback?error=invalid_request&error_code=bad_oauth_state&error_description=OAuth+state+has+expired',
+    );
+    expect(await screen.findByTestId('link-expired-title')).toHaveTextContent('That took too long');
+    expect(
+      screen.getByText('We stopped it to keep your account safe. Please try again.'),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('link-expired-try-again')).toBeInTheDocument();
+    expect(screen.queryByTestId('link-expired-send')).not.toBeInTheDocument();
+  });
+
+  it("FHS-714: Cancel on Google says Google sign-in didn't finish, not a broken email link", async () => {
+    renderAt('/auth/callback?error=access_denied&error_description=User+cancelled+the+request');
+    expect(await screen.findByTestId('link-expired-title')).toHaveTextContent(
+      "Google sign-in didn't finish",
+    );
+    expect(screen.getByTestId('link-expired-try-again')).toBeInTheDocument();
+    expect(screen.queryByTestId('link-expired-send')).not.toBeInTheDocument();
+  });
+
+  it('FHS-714: an expired email link still says so, not "Google"', async () => {
+    renderAt(
+      '/auth/callback#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired',
+    );
+    expect(await screen.findByTestId('link-expired-title')).toHaveTextContent(
+      'That link has expired',
+    );
+  });
+
   it('FHS-604: a fresh tab recalls the address from device memory', async () => {
     localStorage.setItem('fh.auth.email', 'sarah@khan.family');
     renderAt(

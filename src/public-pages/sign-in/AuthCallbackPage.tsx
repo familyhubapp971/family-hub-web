@@ -22,6 +22,19 @@ function extractAuthError(
   return { code, description: h.get('error_description') ?? query.get('error_description') ?? '' };
 }
 
+// FHS-712: our sign-in server keeps a Google sign-in open for 5 minutes. After
+// that it answers "OAuth state has expired" (code bad_oauth_state). That is
+// not a dead email link, so it gets its own message.
+function isGoogleTimeout(err: { code: string; description: string }): boolean {
+  return err.code === 'bad_oauth_state' || /oauth state/i.test(err.description);
+}
+
+// FHS-714: pressing Cancel on Google's page comes back as access_denied with
+// no email-link code. That is not a broken email link either.
+function isGoogleCancel(err: { code: string; description: string }): boolean {
+  return err.code === 'access_denied' && !/otp|expired|link/i.test(err.description);
+}
+
 function isExpiredLink(err: { code: string; description: string }): boolean {
   return /expired/i.test(err.code) || /expired/i.test(err.description);
 }
@@ -63,9 +76,13 @@ export function AuthCallbackPage() {
     authError
       ? {
           kind: 'error',
-          message: isExpiredLink(authError)
-            ? 'Your sign-in link has expired. Request a new one to log in.'
-            : 'That sign-in link is invalid or has already been used. Request a new one.',
+          message: isGoogleTimeout(authError)
+            ? 'That took too long, so we stopped it to keep your account safe. Please try again.'
+            : isGoogleCancel(authError)
+              ? "Google sign-in didn't finish. Please try again."
+              : isExpiredLink(authError)
+                ? 'Your sign-in link has expired. Request a new one to log in.'
+                : 'That sign-in link is invalid or has already been used. Request a new one.',
         }
       : { kind: 'idle' },
   );
@@ -77,13 +94,19 @@ export function AuthCallbackPage() {
     authError ? 'error' : exchangeCodeRef.current ? 'pending' : 'done',
   );
 
-  // An expired/invalid link must not leave the user signed in via a previously
-  // persisted session: sign out so they truly start over with a fresh link.
+  // FHS-714: an old link used to sign out whoever was signed in, so tapping a
+  // stale email logged a parent out of the device for nothing. Someone signed
+  // in now stays signed in, and the error screen offers "Continue as". With no
+  // session the sign-out stays, clearing anything half-finished.
   useEffect(() => {
-    if (!authError) return;
+    if (!authError || loading || session) return;
     void supabase.auth.signOut().catch(() => {
       /* best-effort: the error message + no-navigate already protect the user */
     });
+  }, [authError, loading, session]);
+
+  useEffect(() => {
+    if (!authError) return;
     if (typeof window !== 'undefined' && window.history?.replaceState) {
       try {
         const url = new URL(window.location.href);
@@ -152,9 +175,24 @@ export function AuthCallbackPage() {
   // form to request a new one, rather than borrowing the loading screen's
   // stalled state and showing a progress bar while nothing is happening.
   if (status.kind === 'error') {
+    // FHS-714: wait the moment it takes to know whether they are signed in,
+    // so the screen never shows "send a new link" and then swaps.
+    if (loading) return <LoadingScreen context="callback" />;
+    const reason = reasonFromError(status.message);
+    const sessionEmail = session?.user?.email;
+    const linkEmail = emailFromLink(searchParams);
+    // "Continue as" only when this was an email link for the person already
+    // signed in. Someone else's link on a shared laptop gets the normal screen,
+    // with the way to a new link of their own.
+    const samePerson =
+      !!sessionEmail &&
+      (!linkEmail || linkEmail.toLowerCase() === sessionEmail.toLowerCase()) &&
+      reason !== 'timed-out' &&
+      reason !== 'google-cancelled';
     return (
       <LinkExpired
-        reason={reasonFromError(status.message)}
+        reason={reason}
+        signedInAs={samePerson ? sessionEmail : undefined}
         email={
           emailFromLink(searchParams) ||
           sessionStorage.getItem('fh.signup.email') ||

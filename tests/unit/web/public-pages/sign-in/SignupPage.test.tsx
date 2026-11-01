@@ -135,4 +135,15 @@ describe('<SignupPage />', () => {
       expect(screen.getByTestId('signup-error').textContent).toMatch(/brand-new supabase failure/i),
     );
   });
+
+  it('FHS-714: arrives with the email already filled in from the login page', () => {
+    render(
+      <MemoryRouter
+        initialEntries={[{ pathname: '/signup', state: { email: 'sarah@example.com' } }]}
+      >
+        <SignupPage />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('signup-email')).toHaveValue('sarah@example.com');
+  });
 });
