@@ -170,9 +170,12 @@ export function ConfirmEmailPage() {
                 <MailX className="text-gray-500" size={32} aria-hidden="true" />
               </IconDisc>
               <h1 className="mb-4 font-heading text-3xl">This link has expired</h1>
+              {/* FHS-714: this change is self-serve (only your own card has
+                  the button), so "ask an admin" sent people to someone who
+                  cannot help. Point them at the button instead. */}
               <p className="mb-8 font-bold text-gray-600">
-                It may already have been used, or the change was cancelled. Ask an admin to send a
-                new one.
+                It may already have been used, or the change was cancelled. To get a new link, open
+                Manage family from your profile menu and choose Change email again.
               </p>
               <Button
                 type="button"

@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Check } from 'lucide-react';
 import { z } from 'zod';
 import { Button, Input } from '@familyhub/ui';
@@ -50,9 +50,17 @@ type Status =
   | { kind: 'submitting' }
   | { kind: 'submitting-google' };
 
+// FHS-714: the login page sends a parent with no account here with the email
+// they already typed, so they do not have to type it twice.
+function emailFromState(state: unknown): string {
+  const email = (state as { email?: unknown } | null)?.email;
+  return typeof email === 'string' ? email : '';
+}
+
 export function SignupPage() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
+  const location = useLocation();
+  const [email, setEmail] = useState(() => emailFromState(location.state));
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {

@@ -55,7 +55,7 @@ type Status =
   | { kind: 'idle' }
   | { kind: 'submitting' }
   | { kind: 'submitting-google' }
-  | { kind: 'error'; message: string };
+  | { kind: 'error'; message: string; noAccount?: boolean };
 
 function isKnownRole(value: string | null): value is Role {
   return value === 'parent' || value === 'kid';
@@ -102,7 +102,8 @@ export function LoginPage() {
       },
     });
     if (error) {
-      setStatus({ kind: 'error', message: friendlyAuthErrorMessage(error.message) });
+      const message = friendlyAuthErrorMessage(error.message);
+      setStatus({ kind: 'error', message, noAccount: message.startsWith('No account found') });
       return;
     }
     sessionStorage.setItem('fh.signup.email', parsed.data.email);
@@ -253,6 +254,23 @@ export function LoginPage() {
                   >
                     {status.kind === 'submitting' ? 'Sending…' : 'Continue with email →'}
                   </Button>
+
+                  {/* FHS-714: a parent with no account used to retype their
+                  email on the signup page. This carries it over. It sits
+                  under the main button so that button never moves. */}
+                  {status.kind === 'error' && status.noAccount && (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="md"
+                      fullWidth
+                      testId="login-create-with-email"
+                      className="mt-3"
+                      onClick={() => navigate('/signup', { state: { email: email.trim() } })}
+                    >
+                      Create a family with this email
+                    </Button>
+                  )}
                 </form>
 
                 <div className="my-6 flex items-center gap-3 font-body text-xs uppercase tracking-widest text-gray-500">
@@ -470,7 +488,15 @@ function KidLoginPanel() {
   // error state.
   function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const next = code.trim().toLowerCase();
+    // FHS-714: tidy phone typing, as the create-family form does. Phones
+    // capitalise the first letter, iPhones turn a typed hyphen into a long
+    // dash, and kids type the family name with a space.
+    const next = code
+      .trim()
+      .toLowerCase()
+      .replace(/[\s\u2010-\u2015]+/g, '-')
+      .replace(/-{2,}/g, '-')
+      .replace(/^-+|-+$/g, '');
     if (!SLUG_RE.test(next)) {
       setError("That doesn't look like a family code. Ask a grown-up if you're not sure.");
       return;

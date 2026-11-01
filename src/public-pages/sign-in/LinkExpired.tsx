@@ -77,10 +77,16 @@ type SendState =
 export function LinkExpired({
   reason = 'expired',
   email: initialEmail = '',
+  signedInAs,
 }: {
   reason?: LinkReason;
   /** Prefilled when we already know the address, empty when we do not. */
   email?: string;
+  /**
+   * FHS-714: the email of whoever is signed in on this device right now. A
+   * dead link changes nothing for them, so the way forward is carrying on.
+   */
+  signedInAs?: string | undefined;
 }) {
   const [email, setEmail] = useState(initialEmail);
   const [state, setState] = useState<SendState>({ kind: 'idle' });
@@ -142,10 +148,25 @@ export function LinkExpired({
                 {copy.title}
               </h1>
 
-              <p className="mt-3 font-body font-bold text-gray-600">{copy.line}</p>
+              <p className="mt-3 font-body font-bold text-gray-600">
+                {signedInAs ? "You're still signed in, so there's nothing to fix." : copy.line}
+              </p>
             </div>
 
-            {SIGN_IN_AGAIN.includes(reason) ? (
+            {signedInAs ? (
+              // Same words as the phone app.
+              <Button
+                type="button"
+                variant="primary"
+                size="lg"
+                fullWidth
+                testId="link-expired-continue"
+                className="mt-6 min-h-[48px] break-all"
+                onClick={() => navigate('/dashboard')}
+              >
+                Continue as {signedInAs}
+              </Button>
+            ) : SIGN_IN_AGAIN.includes(reason) ? (
               <Button
                 type="button"
                 variant="primary"
@@ -253,7 +274,7 @@ export function LinkExpired({
               </>
             )}
 
-            {SIGN_IN_AGAIN.includes(reason) ? null : (
+            {signedInAs || SIGN_IN_AGAIN.includes(reason) ? null : (
               <p className="mt-2 text-center">
                 <Link
                   to="/login"

@@ -8,7 +8,8 @@
 [FHS-609](https://qualicion2.atlassian.net/browse/FHS-609) (the known address is stated in the panel),
 [FHS-586](https://qualicion2.atlassian.net/browse/FHS-586) (email box colour + helper copy),
 [FHS-360](https://qualicion2.atlassian.net/browse/FHS-360) (kid sign-in),
-[FHS-237](https://qualicion2.atlassian.net/browse/FHS-237) (the card)
+[FHS-237](https://qualicion2.atlassian.net/browse/FHS-237) (the card),
+[FHS-714](https://qualicion2.atlassian.net/browse/FHS-714) (sign-in and sign-up test sweep)
 **Status:** shipped
 **Owner:** product-manager
 **Design:** Magic Patterns `kudjspxd3xxroueg5jw11o`, `pages/Login.tsx`
@@ -150,6 +151,33 @@ as its own band above the button, and nesting it brought the gap to 24px
 box for both states, and the founder's design revision brought back the
 stated panel, which shipped as FHS-609. The panel is fed by the address in
 the link (FHS-605) with device memory as the fallback (FHS-604).
+
+### Fixes from the sign-in test sweep (FHS-714)
+
+- **No signal gets plain words.** "{}", "Load failed" and similar now read
+  "We couldn't reach Family Hub. Check your signal and try again." The phone
+  app says the same.
+- **A failed family check offers a retry.** If the check for your family
+  fails, you see that message with a "Try again" button. The create-a-family
+  form shows only when the check works and you have no family.
+- **An old sign-in email no longer signs you out.** If you are still signed
+  in, the expired-link screen says "You're still signed in, so there's
+  nothing to fix." with a "Continue as" button showing your email.
+- **Invited parents get a way out.** The create-a-family form says "Invited
+  to a family? Log out and sign in with the email the invite went to." and
+  ends with "Not you?" and a Log out button.
+- **Resend waits a minute from the start.** The check-email page starts its
+  60-second wait when it opens, because the email was just sent.
+- **"No account found" carries the email over.** A "Create a family with
+  this email" button opens sign-up with the email already filled in.
+- **Kid family codes are tidied.** Capitals, spaces and long dashes become
+  small letters and hyphens, and a link with capitals works the same.
+- **PIN boxes come back after a lockout** by themselves when the wait ends.
+- **A kid signing in on a shared tablet gets the kid view.** It signs the
+  parent out of that tablet only; their other devices stay signed in.
+  Letting the kid view win while both stayed signed in would not hold: the
+  parent's session clears the kid sign-in every time the tab comes back to
+  the front.
 
 ## Out of scope
 

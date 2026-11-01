@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { Button, Card } from '@familyhub/ui';
 import { supabase } from '../../app/lib/supabase';
 import { authCallbackUrl } from '../../app/lib/auth-email';
+import { friendlyAuthErrorMessage } from '../../app/lib/auth-errors';
 import { webmailFor } from '../../app/lib/webmail';
 
 // Validate the email source BEFORE we render it or hand it to Supabase.
@@ -67,15 +68,21 @@ export function VerifyEmailPage() {
   // Rehydrate the cooldown from sessionStorage on mount so it survives
   // navigation. Without this a user could defeat the rate-limit by
   // clicking Resend → back → forward and re-clicking.
+  //
+  // FHS-714: with no cooldown saved, start one now. Every way onto this page
+  // has just sent the email, and the server allows one a minute, so a tap on
+  // Resend straight away always failed.
   useEffect(() => {
-    const raw = sessionStorage.getItem(RESEND_DEADLINE_KEY);
-    if (!raw) return;
-    const deadline = Number(raw);
-    if (!Number.isFinite(deadline)) return;
-    const secondsLeft = Math.ceil((deadline - Date.now()) / 1000);
-    if (secondsLeft > 0) setResend({ kind: 'cooldown', secondsLeft });
-    else sessionStorage.removeItem(RESEND_DEADLINE_KEY);
-  }, []);
+    if (!email) return;
+    const deadline = Number(sessionStorage.getItem(RESEND_DEADLINE_KEY));
+    const secondsLeft = Number.isFinite(deadline) ? Math.ceil((deadline - Date.now()) / 1000) : 0;
+    if (secondsLeft > 0) {
+      setResend({ kind: 'cooldown', secondsLeft });
+      return;
+    }
+    sessionStorage.setItem(RESEND_DEADLINE_KEY, String(Date.now() + RESEND_COOLDOWN_S * 1000));
+    setResend({ kind: 'cooldown', secondsLeft: RESEND_COOLDOWN_S });
+  }, [email]);
 
   // Drive the cooldown timer. Decrement once per second; flip back to
   // idle when it hits zero so the button re-enables.
@@ -105,7 +112,7 @@ export function VerifyEmailPage() {
       options: { emailRedirectTo: authCallbackUrl(email) },
     });
     if (error) {
-      setResend({ kind: 'error', message: error.message });
+      setResend({ kind: 'error', message: friendlyAuthErrorMessage(error.message) });
       return;
     }
     sessionStorage.setItem(RESEND_DEADLINE_KEY, String(Date.now() + RESEND_COOLDOWN_S * 1000));

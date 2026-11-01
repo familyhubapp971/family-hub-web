@@ -34,6 +34,9 @@ function isKnownTab(id: string | null): id is string {
 // FHS-257: the dashboard route is shared by parents (Supabase session)
 // and kids (kid JWT). A kid token takes precedence so a child who just
 // logged in gets the kid shell, never the parent surface.
+// FHS-714: that holds because a kid signing in signs the parent out of
+// this device first (KidSignIn), and a parent signing in clears the kid
+// token (AuthProvider).
 export function DashboardPage() {
   const { session } = useAuth();
   const kidToken = getKidToken();
