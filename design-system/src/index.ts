@@ -46,6 +46,7 @@ export { Toggle, type ToggleProps } from './Toggle';
 export { BoostButton, type BoostButtonProps } from './BoostButton';
 export { ChoiceRow, type ChoiceRowProps } from './ChoiceRow';
 export { ResultBanner, type ResultBannerProps } from './ResultBanner';
+export { CopyCode, type CopyCodeProps } from './CopyCode';
 export {
   ROLE_STYLE,
   roleStyle,

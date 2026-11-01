@@ -68,4 +68,18 @@ describe('friendlyAuthErrorMessage', () => {
       /wait a moment before asking for another link/i,
     );
   });
+
+  // FHS-714: people with no signal saw "{}" or "Load failed" on screen.
+  it.each([
+    '{}',
+    'Load failed',
+    'TypeError: Failed to fetch',
+    'Network request failed',
+    'Network error',
+    'networkerror when attempting to fetch resource.',
+  ])('FHS-714: a person with no signal is told to check it, not shown %j', (raw) => {
+    expect(friendlyAuthErrorMessage(raw)).toBe(
+      "We couldn't reach Family Hub. Check your signal and try again.",
+    );
+  });
 });

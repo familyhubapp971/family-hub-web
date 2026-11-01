@@ -8,7 +8,10 @@
 [FHS-609](https://qualicion2.atlassian.net/browse/FHS-609) (the known address is stated in the panel),
 [FHS-586](https://qualicion2.atlassian.net/browse/FHS-586) (email box colour + helper copy),
 [FHS-360](https://qualicion2.atlassian.net/browse/FHS-360) (kid sign-in),
-[FHS-237](https://qualicion2.atlassian.net/browse/FHS-237) (the card)
+[FHS-237](https://qualicion2.atlassian.net/browse/FHS-237) (the card),
+[FHS-714](https://qualicion2.atlassian.net/browse/FHS-714) (sign-in and sign-up test sweep),
+[FHS-715](https://qualicion2.atlassian.net/browse/FHS-715) (Private family code),
+[FHS-716](https://qualicion2.atlassian.net/browse/FHS-716) (One family per home)
 **Status:** shipped
 **Owner:** product-manager
 **Design:** Magic Patterns `kudjspxd3xxroueg5jw11o`, `pages/Login.tsx`
@@ -64,6 +67,32 @@ magic link or Google. Kids pick their face and type a PIN.
 - **Given** the ported screen
 - **When** it is measured
 - **Then** every control is at least 44px, focus rings are visible, and inputs keep their labels
+
+### Story 3: A private family code
+
+**As a** parent
+**I want** my family's address and kid code to be a private code, not our surname
+**so that** nobody can find my children's faces by guessing our name.
+
+#### Acceptance criteria
+
+**Scenario: A kid types the family code once**
+
+- **Given** a kid on a tablet that does not remember a family chooses "I'm a Kid"
+- **When** they type the code from the Members page, like e29b-41d4
+- **Then** their family's faces show, and the tablet remembers the family next time
+
+**Scenario: An old surname link works only for the family**
+
+- **Given** a signed-in parent opens an old address like /t/smith/members
+- **When** the server says that address was their family's
+- **Then** the same page opens at the family's code
+- **And** anyone else gets the usual "not found" or sign-in, never the family
+
+**Scenario: A kid link with a surname asks for the code**
+
+- **Given** a kid opens an old link like /t/smith/kid-login
+- **Then** they land on the step where they type the family code, not on any faces
 
 ## Behaviour as shipped
 
@@ -150,6 +179,101 @@ as its own band above the button, and nesting it brought the gap to 24px
 box for both states, and the founder's design revision brought back the
 stated panel, which shipped as FHS-609. The panel is fed by the address in
 the link (FHS-605) with device memory as the fallback (FHS-604).
+
+### Fixes from the sign-in test sweep (FHS-714)
+
+- **No signal gets plain words.** "{}", "Load failed" and similar now read
+  "We couldn't reach Family Hub. Check your signal and try again." The phone
+  app says the same.
+- **A failed family check offers a retry.** If the check for your family
+  fails, you see that message with a "Try again" button. The create-a-family
+  form shows only when the check works and you have no family.
+- **An old sign-in email no longer signs you out.** If you are still signed
+  in, the expired-link screen says "You're still signed in, so there's
+  nothing to fix." with a "Continue as" button showing your email.
+- **Invited parents get a way out.** The create-a-family form says "Invited
+  to a family? Log out and sign in with the email the invite went to." and
+  ends with "Not you?" and a Log out button.
+- **Resend waits a minute from the start.** The check-email page starts its
+  60-second wait when it opens, because the email was just sent.
+- **"No account found" carries the email over.** A "Create a family with
+  this email" button opens sign-up with the email already filled in.
+- **Kid family codes are tidied.** Capitals, spaces and long dashes become
+  small letters and hyphens, and a link with capitals works the same.
+- **PIN boxes come back after a lockout** by themselves when the wait ends.
+- **A kid signing in on a shared tablet gets the kid view.** It signs the
+  parent out of that tablet only; their other devices stay signed in.
+  Letting the kid view win while both stayed signed in would not hold: the
+  parent's session clears the kid sign-in every time the tab comes back to
+  the front.
+
+## Private family code and one family per home (FHS-715, FHS-716)
+
+What shipped on the website. The server half lives in family-hub-api.
+
+- **The server makes every family's code.** It is 8 letters and digits in two
+  groups, like e29b-41d4, and it is the family's address too
+  (`/t/e29b-41d4/...`). Older families get one as well; their surname address
+  is kept by the server as the "previous" address.
+- **Nobody types an address any more.** The create-a-family form asks only
+  "Your name" and "Family name", and the Family URL box (with its FHS-713
+  tidying) is gone. The form opens the family at the code the server sends
+  back.
+- **One family per home.** If someone who already made a family fills the form
+  again, the server hands back that family and the form opens it, rather than
+  making a second one.
+- **The address can end with the family name**, like
+  `/t/e29b-41d4/the-smith-family`, which opens the family's home. The code on
+  its own does the same. Inner pages keep `/t/<code>/<page>`: a deliberate
+  choice, so every link in the app did not need rewriting.
+- **Old surname addresses forward for members only.** A signed-in person
+  opening `/t/smith/...` is asked about on the server; if the address was their
+  family's, the same page opens at the code, with the rest of the address and
+  anything after the `?` kept. Anyone else, or someone signed out, sees the
+  usual not-found or sign-in, so a surname never reveals a family. A code typed
+  in capitals opens the same family.
+- **Kid pages with a surname ask for the code.** `/t/smith/kid-login` goes to
+  the "I'm a Kid" family-code step instead of showing faces.
+- **The kid family-code box** shows "e29b-41d4" as its example, with the help
+  line "Ask a grown-up for your family code. It looks like e29b-41d4 and is on
+  the Members page." The phone app uses the same words. A code typed in
+  capitals, with a space, or without the hyphen still finds the family.
+- **Grown-ups get the code on the Members page** in a "Kids' sign-in" card, with
+  a button that hands the tablet over to the kids. See
+  [family-members.md](family-members.md).
+
+## The phone app (FHS-708)
+
+The app (family-hub-app) offers the same choices with the same words and
+rules as the website, so nobody relearns anything.
+
+- **One screen, not two pages.** "I'm a Parent" and "I'm a Kid" are tabs, and
+  "Create a new family" switches the same card to the sign-up words.
+- **Email links come back to the app** at `familyhub://auth/callback`. That
+  address is on the staging sign-in server's allowed list. Production gets it
+  only when the app is released, with the founder's go-ahead.
+- **Google** opens in a secure in-app browser and returns to the app.
+- **"Check your email!"** has the same 60-second wait before "Resend".
+- **Expired, used or broken links** show the same three reasons and send a
+  fresh link in one tap, to the email the device remembers.
+- **Kids** type the family code once per device; after that they only tap their
+  face and enter the PIN, which checks itself at 4 digits.
+- **A grown-up with no family** creates one in the app, with the website's
+  labels, rules and error lines.
+- **The look is the phone design's.** Magic Patterns "FH Mobile App Branding
+  Kit" v3: the kingdom purple with the FH badge at the top, a white sheet
+  below, a grey switch for "I'm a Parent" and "I'm a Kid", coloured face
+  tiles and a round-key PIN pad. The words stay the website's where the
+  website has them (founder decision, 2026-11-01).
+- **Two additions from the design:** "Open Mail" after a link is sent, and a
+  number pad for the PIN instead of the phone's keyboard.
+- **Google sign-in left open over 5 minutes** is closed by the app on an
+  iPhone, with "That took too long, so we stopped it to keep your account
+  safe. Please try again." (FHS-712, Google sign-in timeout message).
+- **Expo Go cannot finish a grown-up sign-in**, because its return address is
+  not on the allowed list. Test builds can.
+- **The same sweep fixes** apply in the app wherever it has the feature
+  (family-hub-app #2, FHS-714).
 
 ## Out of scope
 

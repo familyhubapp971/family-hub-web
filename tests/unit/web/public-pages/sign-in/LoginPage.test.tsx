@@ -30,6 +30,17 @@ function KidLoginMarker() {
   return <div data-testid="route-kid-login">kid-login:{slug}</div>;
 }
 
+// FHS-714: shows the email the login page carried over to /signup.
+function SignupMarker() {
+  const loc = useLocation();
+  const email = (loc.state as { email?: string } | null)?.email ?? '';
+  return (
+    <div data-testid="route-marker" data-email={email}>
+      signup
+    </div>
+  );
+}
+
 function renderPage(initial = '/login') {
   return render(
     <MemoryRouter initialEntries={[initial]}>
@@ -44,7 +55,7 @@ function renderPage(initial = '/login') {
           }
         />
         <Route path="/verify-email" element={<div data-testid="route-marker">verify-email</div>} />
-        <Route path="/signup" element={<div data-testid="route-marker">signup</div>} />
+        <Route path="/signup" element={<SignupMarker />} />
         <Route path="/t/:slug/kid-login" element={<KidLoginMarker />} />
       </Routes>
     </MemoryRouter>,
@@ -142,6 +153,37 @@ describe('<LoginPage />', () => {
     expect(text).toMatch(/too many sign-in links/i);
     expect(text).toMatch(/google/i);
     expect(screen.queryByTestId('route-marker')).toBeNull();
+    // Only "No account found" offers to create a family.
+    expect(screen.queryByTestId('login-create-with-email')).toBeNull();
+  });
+
+  it('FHS-714: "No account found" offers to create a family without retyping the email', async () => {
+    signInWithOtp.mockResolvedValue({ error: { message: 'Signups not allowed for otp' } });
+    renderPage();
+    fireEvent.change(screen.getByTestId('login-email'), {
+      target: { value: 'sarah@example.com' },
+    });
+    fireEvent.submit(screen.getByTestId('login-form'));
+    const button = await screen.findByTestId('login-create-with-email');
+    expect(button.textContent).toBe('Create a family with this email');
+    fireEvent.click(button);
+    const marker = screen.getByTestId('route-marker');
+    expect(marker.textContent).toBe('signup');
+    expect(marker).toHaveAttribute('data-email', 'sarah@example.com');
+  });
+
+  it('FHS-714: the create-a-family offer goes when the email is changed', async () => {
+    signInWithOtp.mockResolvedValue({ error: { message: 'Signups not allowed for otp' } });
+    renderPage();
+    fireEvent.change(screen.getByTestId('login-email'), {
+      target: { value: 'sarah@example.com' },
+    });
+    fireEvent.submit(screen.getByTestId('login-form'));
+    await screen.findByTestId('login-create-with-email');
+    fireEvent.change(screen.getByTestId('login-email'), {
+      target: { value: 'sara@example.com' },
+    });
+    expect(screen.queryByTestId('login-create-with-email')).toBeNull();
   });
 
   it('Google button kicks off signInWithOAuth with provider=google', () => {
@@ -194,6 +236,47 @@ describe('<LoginPage />', () => {
     fireEvent.change(screen.getByTestId('login-kid-code'), { target: { value: 'Smiths' } });
     fireEvent.submit(screen.getByTestId('login-kid-form'));
     await waitFor(() => expect(screen.getByTestId('kid-login-avatars')).toBeInTheDocument());
+  });
+
+  it.each([
+    ['Smiths', 'smiths'],
+    ['The Smiths', 'the-smiths'],
+    ['the\u2013smiths', 'the-smiths'],
+    ['The \u2014 Smiths', 'the-smiths'],
+    ['  smiths  ', 'smiths'],
+  ])('FHS-714: tidies phone typing %j in the family code to %j', async (typed, slug) => {
+    stubKidMembersFetch();
+    renderPage('/login?role=kid');
+    fireEvent.change(screen.getByTestId('login-kid-code'), { target: { value: typed } });
+    fireEvent.submit(screen.getByTestId('login-kid-form'));
+    await waitFor(() => expect(screen.getByTestId('kid-login-avatars')).toBeInTheDocument());
+    const fetchMock = vi.mocked(fetch);
+    expect(String(fetchMock.mock.calls[0]![0])).toMatch(new RegExp(`/kid-members/${slug}$`));
+  });
+
+  it.each([
+    ['E29B-41D4', 'e29b-41d4'],
+    ['e29b41d4', 'e29b-41d4'],
+    ['E29B 41D4', 'e29b-41d4'],
+  ])('FHS-715: a kid typing %j finds the family %j', async (typed, code) => {
+    stubKidMembersFetch();
+    renderPage('/login?role=kid');
+    fireEvent.change(screen.getByTestId('login-kid-code'), { target: { value: typed } });
+    fireEvent.submit(screen.getByTestId('login-kid-form'));
+    await waitFor(() => expect(screen.getByTestId('kid-login-avatars')).toBeInTheDocument());
+    const fetchMock = vi.mocked(fetch);
+    expect(String(fetchMock.mock.calls[0]![0])).toMatch(new RegExp(`/kid-members/${code}$`));
+  });
+
+  it('FHS-715: the family-code box shows what a code looks like and where a grown-up finds it', () => {
+    renderPage('/login?role=kid');
+    expect(screen.getByTestId('login-kid-code')).toHaveAttribute('placeholder', 'e29b-41d4');
+    expect(
+      screen.getByText(
+        'Ask a grown-up for your family code. It looks like e29b-41d4 and is on the Members page.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/short name in your family/)).toBeNull();
   });
 
   it('shows a friendly error for an invalid family code and does not navigate', () => {

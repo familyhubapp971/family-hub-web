@@ -1,6 +1,6 @@
 # Feature: Family members
 
-**Jira:** [FHS-1](https://qualicion2.atlassian.net/browse/FHS-1) (schema) · [FHS-513](https://qualicion2.atlassian.net/browse/FHS-513)/[FHS-485](https://qualicion2.atlassian.net/browse/FHS-485)/[FHS-486](https://qualicion2.atlassian.net/browse/FHS-486)/[FHS-514](https://qualicion2.atlassian.net/browse/FHS-514)/[FHS-520](https://qualicion2.atlassian.net/browse/FHS-520)/[FHS-521](https://qualicion2.atlassian.net/browse/FHS-521) (Manage Family redesign) · [FHS-519](https://qualicion2.atlassian.net/browse/FHS-519) (Manage Family follow-up cleanups) · FHR-29/FHR-30/FHR-31 (phone layout fixes, 2026-10-28)
+**Jira:** [FHS-1](https://qualicion2.atlassian.net/browse/FHS-1) (schema) · [FHS-513](https://qualicion2.atlassian.net/browse/FHS-513)/[FHS-485](https://qualicion2.atlassian.net/browse/FHS-485)/[FHS-486](https://qualicion2.atlassian.net/browse/FHS-486)/[FHS-514](https://qualicion2.atlassian.net/browse/FHS-514)/[FHS-520](https://qualicion2.atlassian.net/browse/FHS-520)/[FHS-521](https://qualicion2.atlassian.net/browse/FHS-521) (Manage Family redesign) · [FHS-519](https://qualicion2.atlassian.net/browse/FHS-519) (Manage Family follow-up cleanups) · FHR-29/FHR-30/FHR-31 (phone layout fixes, 2026-10-28) · [FHS-715](https://qualicion2.atlassian.net/browse/FHS-715) (Private family code: the Kids' sign-in card)
 **Status:** shipped, member data model + the Manage Family page
 **Owner:** product-manager
 **ADR:** [0015](../decisions/0015-role-model-owner-flag.md), [0019](../decisions/0019-role-privilege-matrix.md)
@@ -201,17 +201,41 @@ they sign in **so that** I understand the household shape at a glance.
 - **Then** the empty group shows a short placeholder ("No kids yet" /
   "No grown-ups yet") instead of just disappearing from the page
 
-### Story 6: Learn how my kids sign in
+### Story 6: Get my kids signed in on their tablet
 
-**As an** admin **I want** a plain explanation of how my kids log in **so
-that** I can walk them through it.
+**As a** grown-up **I want** our family code and plain steps for the kids'
+tablet **so that** my kids can sign in without me typing an address.
 
-**Scenario: "How your kids sign in" card explains how to reach the login (FHS-530)**
+**Scenario: The Kids' sign-in card shows the family code (FHS-715)**
 
-- **Given** I open Manage Family and expand the "How your kids sign in" card
-- **Then** step 1 ("Open their login page") shows two ways to open the login,
-  the kid-login page link with a copy button, **or** the family code (the family slug)
-- **And** step 2 is "They tap their face and enter their PIN"
+- **Given** I am a grown-up (admin, adult or guest) on Manage Family
+- **Then** a "Kids' sign-in" card shows our family code in big letters, like e29b-41d4, with a "Copy" button
+- **And** three steps: "1. On the kids' tablet, open Family Hub." "2. Tap "I'm a Kid"." "3. Type this code. Done, it's never asked again."
+- **And** our address with the family name at the end, like fhapp.up.railway.app/t/e29b-41d4/the-smith-family
+
+**Scenario: Hand this tablet to the kids (FHS-715)**
+
+- **Given** I am on Manage Family on the tablet the kids will use
+- **When** I tap "Hand this tablet to the kids"
+- **Then** the tablet remembers our family for kid sign-in
+- **And** I am signed out of this tablet only (my phone stays signed in)
+- **And** the kid sign-in for our family opens, showing the kids' faces
+
+**Scenario: Signing out of the tablet fails**
+
+- **Given** the tablet has no signal when I tap "Hand this tablet to the kids"
+- **Then** I stay on Manage Family and see "We couldn't sign you out of this tablet. Check your signal and try again."
+
+Notes on what shipped:
+
+- The card replaced the collapsible "How your kids sign in" card, whose link
+  carried the family's surname. The card is always open, since the code is the
+  one thing a grown-up comes here for.
+- Kids (and anyone not a grown-up) never see the card.
+- The card stacks on phones, with the button under the address; from 1024px
+  the code sits beside the steps. The Copy button drops under the code on the
+  narrowest phones rather than squeezing it. The code and Copy button are the
+  design system's `CopyCode` piece.
 
 ### Story 7: Invite an adult or add a child
 
@@ -269,6 +293,8 @@ or remove someone **so that** the roster stays accurate.
 - **Given** I am an admin viewing a child/teen card
 - **When** I choose "Set PIN", enter and confirm 4 matching digits, and save
 - **Then** the PIN is saved; a mismatch or non-4-digit entry is rejected inline
+- **And** the card says "{name} is ready. On the kids' tablet, type {code}." with our family code (FHS-715)
+- **And** removing a kid's login does not show that line
 
 ### Story 9: Reach family-wide settings from the profile menu
 

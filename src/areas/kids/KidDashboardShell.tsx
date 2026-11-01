@@ -13,6 +13,7 @@ import { TopNav, type TopNavTab } from '@familyhub/ui';
 import { clearKidToken, getKidToken } from '../../app/lib/auth-context';
 import { useTenantSlug } from '../../app/lib/tenant-context';
 import { API_BASE } from '../../app/lib/api';
+import { isFamilyCode } from '../../app/lib/family-address';
 import { KidMyWorld } from '../my-world/kid/KidMyWorld';
 import { KidMealsPanel } from '../meals/KidMealsPanel';
 import { KidCalendarPanel } from '../calendar/KidCalendarPanel';
@@ -228,6 +229,13 @@ export function KidDashboardShell() {
         const body = (await r.json().catch(() => null)) as { tenantSlug?: string } | null;
         if (cancelled) return;
         if (body?.tenantSlug && body.tenantSlug !== slug) {
+          // FHS-715: an old surname address (/t/smith/...) with the kid's own
+          // sign-in opens their family at its code. They only ever see the
+          // family their sign-in belongs to, so this reveals nothing.
+          if (!isFamilyCode(slug) && isFamilyCode(body.tenantSlug)) {
+            navigate(`/t/${body.tenantSlug}/dashboard`, { replace: true });
+            return;
+          }
           setConfirmed(false);
           ejectToLogin();
           return;

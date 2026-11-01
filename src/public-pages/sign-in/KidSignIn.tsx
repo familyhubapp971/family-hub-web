@@ -4,6 +4,9 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { ChevronLeft } from 'lucide-react';
 import { AvatarGrid, PinInput, type AvatarTile } from '@familyhub/ui';
 import { API_BASE } from '../../app/lib/api';
+import { friendlyAuthErrorMessage } from '../../app/lib/auth-errors';
+import { supabase } from '../../app/lib/supabase';
+import { rememberFamilyForKids } from '../../app/lib/family-address';
 
 // FHS-360: the kid sign-in flow (avatar tiles → PIN → kid token), shared by
 // the per-family KidLoginPage and the unified LoginPage "I'm a Kid" view so the
@@ -37,7 +40,7 @@ type LoadState =
   | { kind: 'loading' }
   | { kind: 'loaded'; family: { name: string }; kids: KidMember[] }
   | { kind: 'family-not-found' }
-  | { kind: 'load-failed'; message: string };
+  | { kind: 'load-failed'; text: string };
 
 type SubmitState =
   | { kind: 'idle' }
@@ -47,7 +50,7 @@ type SubmitState =
   | { kind: 'error'; message: string };
 
 export function KidSignIn({
-  slug,
+  slug: slugAsTyped,
   onFamilyLoaded,
   notFoundFooter,
   onFamilyNotFound,
@@ -67,6 +70,9 @@ export function KidSignIn({
    */
   onFamilyNotFound?: () => void;
 }) {
+  // FHS-714: family codes are small letters. A /t/Khan/kid-login link used the
+  // capital K for the PIN check and the dashboard address too.
+  const slug = slugAsTyped?.toLowerCase();
   const navigate = useNavigate();
   const reduceMotion = useReducedMotion();
   const [load, setLoad] = useState<LoadState>({ kind: 'loading' });
@@ -80,7 +86,10 @@ export function KidSignIn({
 
   useEffect(() => {
     if (!slug) {
-      setLoad({ kind: 'load-failed', message: 'missing family slug' });
+      setLoad({
+        kind: 'load-failed',
+        text: 'We couldn’t load the family right now (missing family slug). Try again in a moment.',
+      });
       return;
     }
     let cancelled = false;
@@ -96,29 +105,40 @@ export function KidSignIn({
           return;
         }
         if (!res.ok) {
-          setLoad({ kind: 'load-failed', message: `server returned ${res.status}` });
+          setLoad({
+            kind: 'load-failed',
+            text: `We couldn’t load the family right now (server returned ${res.status}). Try again in a moment.`,
+          });
           return;
         }
         const body = (await res.json()) as KidListResponse;
-        try {
-          localStorage.setItem(
-            'fh.kid.lastFamily',
-            JSON.stringify({ slug: body.family.slug, name: body.family.name }),
-          );
-        } catch {
-          /* private mode / storage full: non-fatal */
-        }
+        rememberFamilyForKids(body.family.slug, body.family.name);
         setLoad({ kind: 'loaded', family: body.family, kids: body.kids });
         onFamilyLoaded?.(body.family.name);
       } catch (e) {
         if (cancelled) return;
-        setLoad({ kind: 'load-failed', message: e instanceof Error ? e.message : 'network error' });
+        // FHS-714: "Load failed" means nothing to a kid. Say what to do.
+        setLoad({
+          kind: 'load-failed',
+          text: friendlyAuthErrorMessage(e instanceof Error ? e.message : 'network error'),
+        });
       }
     })();
     return () => {
       cancelled = true;
     };
   }, [slug, onFamilyLoaded]);
+
+  // FHS-714: after a lockout the PIN boxes stayed greyed out until the kid
+  // pressed Back. They come back by themselves once the wait is over.
+  useEffect(() => {
+    if (submit.kind !== 'locked') return;
+    const timer = window.setTimeout(() => {
+      setSubmit({ kind: 'idle' });
+      setPinNonce((n) => n + 1);
+    }, submit.retryAfterSec * 1000);
+    return () => window.clearTimeout(timer);
+  }, [submit]);
 
   useEffect(() => {
     if (load.kind === 'family-not-found') {
@@ -158,6 +178,25 @@ export function KidSignIn({
         if (res.status === 200) {
           const body = (await res.json()) as { token: string };
           if (isStale()) return;
+          // FHS-714: a parent still signed in on this tablet used to win, so
+          // the kid landed on the parent dashboard. Sign the parent out of
+          // this device only (their phone stays signed in). Making the kid
+          // view win instead would not hold: the parent session's "signed
+          // in" event on every return to the tab clears the kid token.
+          // The sign-in library reports a failure by returning it, not by
+          // throwing. If the parent stays signed in, the kid would be thrown
+          // out again later, so stop here and say so.
+          const { error: signOutError } = await supabase.auth
+            .signOut({ scope: 'local' })
+            .catch((err: unknown) => ({ error: err as Error }));
+          if (isStale()) return;
+          if (signOutError) {
+            setSubmit({
+              kind: 'error',
+              message: "We couldn't reach Family Hub. Check your signal and try again.",
+            });
+            return;
+          }
           localStorage.setItem('fh.kid.token', body.token);
           navigate(`/t/${slug}/dashboard`);
           return;
@@ -181,7 +220,10 @@ export function KidSignIn({
         setPinNonce((n) => n + 1);
       } catch (e) {
         if (isStale()) return;
-        setSubmit({ kind: 'error', message: e instanceof Error ? e.message : 'network error' });
+        setSubmit({
+          kind: 'error',
+          message: friendlyAuthErrorMessage(e instanceof Error ? e.message : 'network error'),
+        });
         setPinNonce((n) => n + 1);
       }
     },
@@ -209,7 +251,7 @@ export function KidSignIn({
     return (
       <div>
         <p className="font-body text-sm text-gray-700" data-testid="kid-login-load-error">
-          We couldn&rsquo;t load the family right now ({load.message}). Try again in a moment.
+          {load.text}
         </p>
         {notFoundFooter}
       </div>

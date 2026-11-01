@@ -16,6 +16,8 @@ vi.mock('../../../../../src/app/lib/supabase', () => ({
   },
 }));
 
+const RESEND_SECONDS = 60;
+
 function renderAt(initial: string) {
   return render(
     <MemoryRouter initialEntries={[initial]}>
@@ -116,15 +118,45 @@ describe('<VerifyEmailPage />', () => {
     expect(screen.getByTestId('route-marker').textContent).toBe('signup');
   });
 
-  it('clicking Resend calls signInWithOtp with the same email and starts the 60s cooldown', async () => {
-    signInWithOtp.mockResolvedValue({ error: null });
+  // FHS-714: the email has only just been sent when this page opens, and the
+  // server allows one a minute. These tests wait that minute out first.
+  async function waitOutTheFirstMinute() {
+    for (let i = 0; i < RESEND_SECONDS; i++) {
+      await act(async () => {
+        vi.advanceTimersByTime(1000);
+      });
+    }
+  }
+
+  it('FHS-714: Resend waits a minute when the page opens, because the email was just sent', () => {
     sessionStorage.setItem('fh.signup.email', 'sarah@example.com');
     renderAt('/verify-email');
     const button = screen.getByTestId('verify-email-resend') as HTMLButtonElement;
-    fireEvent.click(button);
-    // Resolves on the next microtask; flush.
-    await Promise.resolve();
-    await Promise.resolve();
+    expect(button.disabled).toBe(true);
+    expect(button.textContent).toMatch(/resend in 60s/i);
+  });
+
+  it('FHS-714: coming back to the page keeps the minute already counting down', () => {
+    sessionStorage.setItem('fh.signup.email', 'sarah@example.com');
+    sessionStorage.setItem('fh.signup.resendDeadline', String(Date.now() + 20_000));
+    renderAt('/verify-email');
+    expect(screen.getByTestId('verify-email-resend').textContent).toMatch(/resend in 20s/i);
+  });
+
+  it('clicking Resend calls signInWithOtp with the same email and starts the 60s cooldown', async () => {
+    vi.useFakeTimers();
+    signInWithOtp.mockResolvedValue({ error: null });
+    sessionStorage.setItem('fh.signup.email', 'sarah@example.com');
+    renderAt('/verify-email');
+    await waitOutTheFirstMinute();
+    const button = screen.getByTestId('verify-email-resend') as HTMLButtonElement;
+    expect(button.disabled).toBe(false);
+    await act(async () => {
+      fireEvent.click(button);
+      // Flush the awaited signInWithOtp microtask.
+      await Promise.resolve();
+      await Promise.resolve();
+    });
     expect(signInWithOtp).toHaveBeenCalledWith({
       email: 'sarah@example.com',
       options: { emailRedirectTo: expect.stringContaining('/auth/callback') },
@@ -139,6 +171,7 @@ describe('<VerifyEmailPage />', () => {
     signInWithOtp.mockResolvedValue({ error: null });
     sessionStorage.setItem('fh.signup.email', 'sarah@example.com');
     renderAt('/verify-email');
+    await waitOutTheFirstMinute();
     const button = screen.getByTestId('verify-email-resend') as HTMLButtonElement;
     await act(async () => {
       fireEvent.click(button);
@@ -164,13 +197,35 @@ describe('<VerifyEmailPage />', () => {
     expect(button.textContent).toMatch(/didn't get it\? resend/i);
   });
 
-  it('renders the Supabase error inline when resend fails', async () => {
+  it('renders a plain error inline when resend fails', async () => {
+    vi.useFakeTimers();
     signInWithOtp.mockResolvedValue({ error: { message: 'rate limit hit' } });
     sessionStorage.setItem('fh.signup.email', 'sarah@example.com');
     renderAt('/verify-email');
-    fireEvent.click(screen.getByTestId('verify-email-resend'));
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(screen.getByTestId('verify-email-resend-error').textContent).toContain('rate limit hit');
+    await waitOutTheFirstMinute();
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('verify-email-resend'));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('verify-email-resend-error').textContent).toMatch(
+      /too many attempts/i,
+    );
+  });
+
+  it('FHS-714: a resend with no signal says to check it, not "Load failed"', async () => {
+    vi.useFakeTimers();
+    signInWithOtp.mockResolvedValue({ error: { message: 'Load failed' } });
+    sessionStorage.setItem('fh.signup.email', 'sarah@example.com');
+    renderAt('/verify-email');
+    await waitOutTheFirstMinute();
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('verify-email-resend'));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('verify-email-resend-error').textContent).toBe(
+      "We couldn't reach Family Hub. Check your signal and try again.",
+    );
   });
 });

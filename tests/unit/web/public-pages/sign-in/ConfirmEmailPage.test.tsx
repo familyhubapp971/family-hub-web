@@ -114,10 +114,23 @@ describe('<ConfirmEmailPage />', () => {
     renderAt('/confirm-email/member-1?token=used-token');
     fireEvent.click(screen.getByTestId('confirm-email-confirm'));
     await waitFor(() => expect(screen.getByText('This link has expired')).toBeInTheDocument());
-    expect(
-      screen.getByText(/ask an admin to send a new one/i, { exact: false }),
-    ).toBeInTheDocument();
     expect(screen.queryByTestId('confirm-email-new-address')).not.toBeInTheDocument();
+  });
+
+  // FHS-714: people change their own email, so "ask an admin" was no help.
+  it('FHS-714: an expired link says how to get a new one yourself, not "ask an admin"', async () => {
+    apiFetch.mockRejectedValue(
+      new ApiError(410, '/api/members/email-change/confirm', { error: 'expired' }),
+    );
+    renderAt('/confirm-email/member-1?token=used-token');
+    fireEvent.click(screen.getByTestId('confirm-email-confirm'));
+    await waitFor(() => expect(screen.getByText('This link has expired')).toBeInTheDocument());
+    expect(
+      screen.getByText(
+        'It may already have been used, or the change was cancelled. To get a new link, open Manage family from your profile menu and choose Change email again.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/ask an admin/i)).not.toBeInTheDocument();
   });
 
   it('"Back to the family" on the expired state falls back to "/" (no tenant known)', async () => {

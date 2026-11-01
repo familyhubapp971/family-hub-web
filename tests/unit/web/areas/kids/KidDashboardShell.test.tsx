@@ -532,6 +532,35 @@ describe('<KidDashboardShell />', () => {
     expect(localStorage.getItem(KID_TOKEN_STORAGE_KEY)).toBeNull();
   });
 
+  it('FHS-715: a kid still signed in on an old surname address opens their family at its code', async () => {
+    localStorage.setItem(KID_TOKEN_STORAGE_KEY, fakeKidJwt());
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ memberId: 'm1', tenantId: 't1', tenantSlug: 'e29b-41d4' }),
+    });
+    renderShell('/t/khan/dashboard');
+    await waitFor(() =>
+      expect(screen.getByTestId('kid-session-confirmed').textContent).toBe('Kid session active'),
+    );
+    expect(screen.queryByTestId('kid-login-page')).not.toBeInTheDocument();
+    expect(localStorage.getItem(KID_TOKEN_STORAGE_KEY)).not.toBeNull();
+    const meCalls = fetchMock.mock.calls.filter(([u]) => String(u).includes('/api/kid/me'));
+    expect(meCalls.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('FHS-715: a sign-in for one family on another family code is still sent to kid sign-in', async () => {
+    localStorage.setItem(KID_TOKEN_STORAGE_KEY, fakeKidJwt());
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ memberId: 'm1', tenantId: 't1', tenantSlug: 'a1b2-c3d4' }),
+    });
+    renderShell('/t/e29b-41d4/dashboard');
+    await waitFor(() => expect(screen.getByTestId('kid-login-page')).toBeInTheDocument());
+    expect(localStorage.getItem(KID_TOKEN_STORAGE_KEY)).toBeNull();
+  });
+
   it('keeps the shell up when /api/kid/me fails with a network error', async () => {
     localStorage.setItem(KID_TOKEN_STORAGE_KEY, fakeKidJwt());
     fetchMock.mockRejectedValue(new Error('offline'));
