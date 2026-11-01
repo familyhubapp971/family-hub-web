@@ -59,6 +59,17 @@ export function friendlyAuthErrorMessage(raw: string | undefined): string {
     return 'No account found for this email - create an account first, then log in.';
   }
 
+  // FHS-714: with no signal the browser says "Load failed" (iPhone) or
+  // "Failed to fetch" (Chrome), and a dropped sign-in reply can arrive as
+  // a bare "{}". None of those mean anything to a parent. The phone app has
+  // the same rule, so both say the same words.
+  if (
+    message === '{}' ||
+    /load failed|failed to fetch|network request failed|network ?error/i.test(message)
+  ) {
+    return "We couldn't reach Family Hub. Check your signal and try again.";
+  }
+
   // Supabase's invalid-email guard. Front-end Zod normally catches this
   // first; keep the fallback for when the network strips the casing.
   if (/invalid.*email/i.test(message) || /email.*invalid/i.test(message)) {
