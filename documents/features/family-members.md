@@ -201,30 +201,30 @@ they sign in **so that** I understand the household shape at a glance.
 - **Then** the empty group shows a short placeholder ("No kids yet" /
   "No grown-ups yet") instead of just disappearing from the page
 
-### Story 6: Get my kids signed in on their tablet
+### Story 6: Get my kids signed in on their device
 
 **As a** grown-up **I want** our family code and plain steps for the kids'
-tablet **so that** my kids can sign in without me typing an address.
+device **so that** my kids can sign in without me typing an address.
 
 **Scenario: The Kids' sign-in card shows the family code (FHS-715)**
 
 - **Given** I am a grown-up (admin, adult or guest) on Manage Family
 - **Then** a "Kids' sign-in" card shows our family code in big letters, like e29b-41d4, with a "Copy" button
-- **And** three steps: "1. On the kids' tablet, open Family Hub." "2. Tap "I'm a Kid"." "3. Type this code. Done, it's never asked again."
+- **And** three steps: "1. On your kids' device, open Family Hub." "2. Tap "I'm a Kid"." "3. Type this code. Done, it's never asked again."
 - **And** our address with the family name at the end, like fhapp.up.railway.app/t/e29b-41d4/the-smith-family
 
-**Scenario: Hand this tablet to the kids (FHS-715)**
+**Scenario: Hand this device to the kids (FHS-715, FHS-721)**
 
-- **Given** I am on Manage Family on the tablet the kids will use
-- **When** I tap "Hand this tablet to the kids"
-- **Then** the tablet remembers our family for kid sign-in
-- **And** I am signed out of this tablet only (my phone stays signed in)
+- **Given** I am on Manage Family on the device the kids will use
+- **When** I tap "Hand this device to the kids"
+- **Then** the device remembers our family for kid sign-in
+- **And** I am signed out of this device only (my phone stays signed in)
 - **And** the kid sign-in for our family opens, showing the kids' faces
 
-**Scenario: Signing out of the tablet fails**
+**Scenario: Signing out of the device fails**
 
-- **Given** the tablet has no signal when I tap "Hand this tablet to the kids"
-- **Then** I stay on Manage Family and see "We couldn't sign you out of this tablet. Check your signal and try again."
+- **Given** the device has no signal when I tap "Hand this device to the kids"
+- **Then** I stay on Manage Family and see "We couldn't sign you out of this device. Check your signal and try again."
 
 Notes on what shipped:
 
@@ -293,7 +293,7 @@ or remove someone **so that** the roster stays accurate.
 - **Given** I am an admin viewing a child/teen card
 - **When** I choose "Set PIN", enter and confirm 4 matching digits, and save
 - **Then** the PIN is saved; a mismatch or non-4-digit entry is rejected inline
-- **And** the card says "{name} is ready. On the kids' tablet, type {code}." with our family code (FHS-715)
+- **And** the card says "{name} is ready. On your kids' device, type {code}." with our family code (FHS-715)
 - **And** removing a kid's login does not show that line
 
 ### Story 9: Reach family-wide settings from the profile menu

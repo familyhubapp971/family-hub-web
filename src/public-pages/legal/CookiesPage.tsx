@@ -91,7 +91,7 @@ const sections: LegalSection[] = [
           not the browser.
         </P>
         <P>
-          On a shared tablet, sign out when a child finishes so the next person must enter their own
+          On a shared device, sign out when a child finishes so the next person must enter their own
           PIN. Questions: <Placeholder>[Privacy contact]</Placeholder>.
         </P>
       </>

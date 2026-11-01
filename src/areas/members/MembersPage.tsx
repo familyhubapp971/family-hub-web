@@ -8,7 +8,7 @@ import {
   Mail,
   Plus,
   Send,
-  Tablet,
+  MonitorSmartphone,
   Trash2,
   UserPlus,
 } from 'lucide-react';
@@ -835,7 +835,7 @@ function KidCard({
 }: KidCardProps) {
   const callerCanManagePin = ADMIN_OR_ADULT.has(callerRole) && isPinEligibleRole(m.role);
   const testId = `members-kid-${idx}`;
-  // FHS-715: right after a PIN is saved, say what to do on the kids' tablet.
+  // FHS-715: right after a PIN is saved, say what to do on the kids' device.
   const [pinJustSet, setPinJustSet] = useState(false);
 
   return (
@@ -925,7 +925,7 @@ function KidCard({
       <div role="status" className={pinJustSet && openPinFor !== m.id ? 'mt-4' : undefined}>
         {pinJustSet && openPinFor !== m.id && (
           <ResultBanner testId={`${testId}-pin-ready`}>
-            {m.displayName} is ready. On the kids&apos; tablet, type {slug}.
+            {m.displayName} is ready. On your kids&apos; device, type {slug}.
           </ResultBanner>
         )}
       </div>
@@ -1027,8 +1027,8 @@ function WaitingRow({ member: m, idx, callerIsAdmin, mutate }: WaitingCardProps)
 }
 
 // FHS-715: the grown-up's side of kid sign-in. The family's private code in
-// big letters to copy, three steps for the kids' tablet, the family's address
-// with its name at the end, and a button that sets this very tablet up for the
+// big letters to copy, three steps for the kids' device, the family's address
+// with its name at the end, and a button that sets this very device up for the
 // kids. Replaces the "How your kids sign in" card (FHS-437 / FHS-513), whose
 // link carried the family's surname.
 function KidsSignInCard({
@@ -1111,7 +1111,7 @@ function KidsSignInCard({
               data-testid="members-code-changed"
             >
               <p>
-                New: kids now use this code instead of &ldquo;{previousSlug}&rdquo;. A tablet set up
+                New: kids now use this code instead of &ldquo;{previousSlug}&rdquo;. A device set up
                 before will ask for it once.
               </p>
               <button
@@ -1133,7 +1133,7 @@ function KidsSignInCard({
           ) : null}
         </div>
         <ol className="min-w-0 flex-1 space-y-3" data-testid="members-kids-sign-in-steps">
-          <KidLoginStep number="1" title="On the kids' tablet, open Family Hub." />
+          <KidLoginStep number="1" title="On your kids' device, open Family Hub." />
           <KidLoginStep number="2" title={'Tap "I\'m a Kid".'} />
           <KidLoginStep number="3" title="Type this code. Done, it's never asked again." />
         </ol>
@@ -1159,7 +1159,8 @@ function KidsSignInCard({
           testId="members-hand-to-kids"
           className="min-h-[48px] w-full shrink-0 md:w-auto"
         >
-          <Tablet size={18} aria-hidden="true" className="mr-2" /> Hand this tablet to the kids
+          <MonitorSmartphone size={18} aria-hidden="true" className="mr-2" /> Hand this device to
+          the kids
         </Button>
       </div>
       {handOff === 'failed' && (
@@ -1168,7 +1169,7 @@ function KidsSignInCard({
           role="alert"
           data-testid="members-hand-to-kids-error"
         >
-          We couldn&apos;t sign you out of this tablet. Check your signal and try again.
+          We couldn&apos;t sign you out of this device. Check your signal and try again.
         </p>
       )}
     </Card>
